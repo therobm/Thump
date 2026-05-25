@@ -61,6 +61,7 @@ private const val QUEUE_ITEM_ART_REQUEST_SIZE_PX: Int = 200
 @Composable
 fun QuickPlaylistsGrid(
     subsonicClient: SubsonicClient,
+    isPulseServer: Boolean,
     onPlaylistSelected: (playlistId: String, playlistName: String) -> Unit,
     onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
@@ -112,6 +113,7 @@ fun QuickPlaylistsGrid(
                 QuickPlaylistTile(
                     playlist = playlists[leftPlaylistIndex],
                     subsonicClient = subsonicClient,
+                    isPulseServer = isPulseServer,
                     onTapped = {
                         val tappedPlaylist = playlists[leftPlaylistIndex]
                         onPlaylistSelected(tappedPlaylist.id, tappedPlaylist.name)
@@ -133,6 +135,7 @@ fun QuickPlaylistsGrid(
                     QuickPlaylistTile(
                         playlist = playlists[rightPlaylistIndex],
                         subsonicClient = subsonicClient,
+                        isPulseServer = isPulseServer,
                         onTapped = {
                             val tappedPlaylist = playlists[rightPlaylistIndex]
                             onPlaylistSelected(tappedPlaylist.id, tappedPlaylist.name)
@@ -164,13 +167,28 @@ fun QuickPlaylistsGrid(
 private fun QuickPlaylistTile(
     playlist: StandardPlaylistSummary,
     subsonicClient: SubsonicClient,
+    isPulseServer: Boolean,
     onTapped: () -> Unit,
     onQuickPlayClicked: () -> Unit,
     modifier: Modifier,
 ) {
-    var entryCoverArtIds: List<String> by remember(playlist.id) { mutableStateOf(emptyList()) }
+    // On Pulse the server generates a composite under id "pl-<playlistId>" (Pulse PR #34), so
+    // skip the per-tile getPlaylist round-trip and feed the single id straight into the tile.
+    // Non-Pulse paths fall back to the on-device 2x2 stitch by fetching playlist entries.
+    var entryCoverArtIds: List<String> by remember(playlist.id, isPulseServer) {
+        val initial: List<String>
+        if (isPulseServer) {
+            initial = listOf("pl-" + playlist.id)
+        } else {
+            initial = emptyList()
+        }
+        mutableStateOf(initial)
+    }
 
-    LaunchedEffect(playlist.id, subsonicClient) {
+    LaunchedEffect(playlist.id, isPulseServer, subsonicClient) {
+        if (isPulseServer) {
+            return@LaunchedEffect
+        }
         val result = subsonicClient.getPlaylist(playlist.id)
         if (result is SubsonicResult.Ok) {
             val entries = result.value.entry

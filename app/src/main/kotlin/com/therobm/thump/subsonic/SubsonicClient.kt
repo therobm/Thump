@@ -324,6 +324,22 @@ class SubsonicClient(
     }
 
     /**
+     * Calls the optional Pulse pulse/recentPlaylists endpoint. Same per-item shape as
+     * pulse/topPlaylists but sorted by per-user lastPlayed (most recent first), with never-
+     * played playlists falling to the back. Only valid when the server has already been
+     * detected as a Pulse server.
+     */
+    suspend fun getPulseRecentPlaylists(count: Int): SubsonicResult<List<PulseTopPlaylist>> {
+        return callAndDecodeRaw(
+            pathAfterBase = "pulse/recentPlaylists",
+            extraQueryParameters = mapOf("count" to count.toString()),
+            payloadDeserializer = PulseRecentPlaylistsResponse.serializer(),
+        ) { response: PulseRecentPlaylistsResponse ->
+            response.playlists
+        }
+    }
+
+    /**
      * Calls the optional Pulse pulse/topPlaylists endpoint. Only valid when the server has
      * already been detected as a Pulse server.
      */
