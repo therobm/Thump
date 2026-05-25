@@ -186,7 +186,7 @@ class ThumpMediaLibraryCallback(
         }
         val out = ImmutableList.builder<MediaItem>()
         for (index in 0 until takeCount) {
-            out.add(playlistToBrowseable(result.value[index], subsonicClient))
+            out.add(playlistToBrowseableWithFallbackArt(result.value[index], subsonicClient))
         }
         return LibraryResult.ofItemList(out.build(), params)
     }
@@ -289,7 +289,7 @@ class ThumpMediaLibraryCallback(
             if (emitted >= RECENTS_TOTAL_LIMIT) {
                 break
             }
-            combined.add(playlistToBrowseable(recentPlaylists[index], subsonicClient))
+            combined.add(playlistToBrowseableWithFallbackArt(recentPlaylists[index], subsonicClient))
             emitted++
         }
         val artistEmitCount = orderedRecentArtists.size
@@ -507,6 +507,49 @@ class ThumpMediaLibraryCallback(
             subtitle = null,
             artUri = coverArtUrl,
         )
+    }
+
+    /**
+     * Playlist tile with the first-track cover art as a fallback when the playlist itself has
+     * no coverArt. This is the workaround for Pulse not generating a server-side composite
+     * (tracked in Flatline Pulse #143) — Auto can't compose 4-up tiles on the fly the way the
+     * phone Compose UI can, so a single representative cover beats a blank tile. Only called
+     * from the small shelves (Home / Recents) since it fires a per-tile getPlaylist call.
+     */
+    private suspend fun playlistToBrowseableWithFallbackArt(
+        playlist: StandardPlaylistSummary,
+        subsonicClient: SubsonicClient,
+    ): MediaItem {
+        val resolvedArtUrl = resolvePlaylistArtUrl(playlist, subsonicClient)
+        return buildBrowseableItem(
+            mediaId = MEDIA_ID_PREFIX_PLAYLIST + playlist.id,
+            title = playlist.name,
+            subtitle = null,
+            artUri = resolvedArtUrl,
+        )
+    }
+
+    private suspend fun resolvePlaylistArtUrl(
+        playlist: StandardPlaylistSummary,
+        subsonicClient: SubsonicClient,
+    ): String? {
+        val ownCoverArtId = playlist.coverArt
+        if (ownCoverArtId != null) {
+            return subsonicClient.buildCoverArtUrl(ownCoverArtId, COVER_ART_REQUEST_SIZE_PX)
+        }
+        val detailResult = subsonicClient.getPlaylist(playlist.id)
+        if (detailResult !is SubsonicResult.Ok) {
+            return null
+        }
+        val entries = detailResult.value.entry
+        val entryCount = entries.size
+        for (entryIndex in 0 until entryCount) {
+            val candidateCoverArtId = entries[entryIndex].coverArt
+            if (candidateCoverArtId != null) {
+                return subsonicClient.buildCoverArtUrl(candidateCoverArtId, COVER_ART_REQUEST_SIZE_PX)
+            }
+        }
+        return null
     }
 
     private fun artistToBrowseable(
