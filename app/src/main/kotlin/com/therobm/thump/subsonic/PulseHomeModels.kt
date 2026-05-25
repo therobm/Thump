@@ -16,6 +16,16 @@ data class PulseRecentlyPlayedResponse(
     val tracks: List<PulseRecentlyPlayedTrack>,
 )
 
+/**
+ * pulse/artistTracks returns the same per-track shape as pulse/recentlyPlayed (id, title,
+ * artist, album, coverArt, duration) so the element type is shared. Only the wrapper differs
+ * to keep the function signature on SubsonicClient self-describing.
+ */
+@Serializable
+data class PulseArtistTracksResponse(
+    val tracks: List<PulseRecentlyPlayedTrack>,
+)
+
 @Serializable
 data class PulseRecentlyPlayedTrack(
     val id: String,

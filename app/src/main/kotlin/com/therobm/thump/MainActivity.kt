@@ -297,10 +297,12 @@ private fun ThumpApp() {
                         ArtistDetailScreen(
                             artistId = artistIdArgument,
                             subsonicClient = subsonicClient,
+                            isPulseServer = isPulseServer,
                             onBackPressed = { navController.popBackStack() },
                             onAlbumSelected = { selectedAlbumId: String ->
                                 navController.navigate(buildAlbumRoute(selectedAlbumId))
                             },
+                            onPlayQueue = onPlayQueue,
                             contentPadding = innerPadding,
                             modifier = Modifier,
                         )
