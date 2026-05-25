@@ -389,6 +389,7 @@ class ThumpMediaLibraryCallback(
         return buildBrowseableItem(
             mediaId = MEDIA_ID_PREFIX_PLAYLIST + playlist.id,
             title = playlist.name,
+            subtitle = null,
             artUri = coverArtUrl,
         )
     }
@@ -407,6 +408,7 @@ class ThumpMediaLibraryCallback(
         return buildBrowseableItem(
             mediaId = MEDIA_ID_PREFIX_ARTIST + artist.id,
             title = artist.name,
+            subtitle = null,
             artUri = coverArtUrl,
         )
     }
