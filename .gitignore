@@ -1,0 +1,34 @@
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.cxx/
+captures/
+output.json
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Kotlin
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys
+*.jks
+*.keystore
+keystore.properties
