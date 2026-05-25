@@ -8,6 +8,7 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import com.therobm.thump.settings.ThumpSettings
 import java.io.File
 
 /**
@@ -63,9 +64,6 @@ class AudioCacheFactory(private val applicationContext: Context) {
     }
 
     companion object {
-        // 500 MB per the Thump spec default. Will become user-configurable when the real
-        // Settings screen lands.
-        private const val AUDIO_CACHE_MAX_BYTES: Long = 500L * 1024L * 1024L
         private const val AUDIO_CACHE_DIRECTORY_NAME: String = "audio_cache"
         private const val HTTP_CONNECT_TIMEOUT_MS: Int = 15_000
         private const val HTTP_READ_TIMEOUT_MS: Int = 20_000
@@ -74,24 +72,41 @@ class AudioCacheFactory(private val applicationContext: Context) {
         private val initLock: Any = Any()
 
         fun obtainCache(applicationContext: Context): SimpleCache {
-            val existing = sharedCache
+            val existing: SimpleCache? = sharedCache
             if (existing != null) {
                 return existing
             }
             synchronized(initLock) {
-                val recheck = sharedCache
+                val recheck: SimpleCache? = sharedCache
                 if (recheck != null) {
                     return recheck
                 }
-                val cacheDirectory = File(applicationContext.filesDir, AUDIO_CACHE_DIRECTORY_NAME)
+                val cacheDirectory: File = File(applicationContext.filesDir, AUDIO_CACHE_DIRECTORY_NAME)
                 if (!cacheDirectory.exists()) {
                     cacheDirectory.mkdirs()
                 }
-                val evictor = LeastRecentlyUsedCacheEvictor(AUDIO_CACHE_MAX_BYTES)
-                val databaseProvider = StandaloneDatabaseProvider(applicationContext)
-                val newCache = SimpleCache(cacheDirectory, evictor, databaseProvider)
+                // Cache size is read once per process lifetime. Changing it from Settings
+                // requires an app restart; the Settings UI calls this out next to the slider.
+                val settings: ThumpSettings = ThumpSettings(applicationContext)
+                val capBytes: Long = settings.getAudioCacheSizeBytes()
+                val evictor: LeastRecentlyUsedCacheEvictor = LeastRecentlyUsedCacheEvictor(capBytes)
+                val databaseProvider: StandaloneDatabaseProvider = StandaloneDatabaseProvider(applicationContext)
+                val newCache: SimpleCache = SimpleCache(cacheDirectory, evictor, databaseProvider)
                 sharedCache = newCache
                 return newCache
+            }
+        }
+
+        /**
+         * Empty the entire audio cache. Safe to call while playback is happening — in-flight
+         * reads finish using cached bytes already handed out; subsequent reads of evicted
+         * tracks fall through to the upstream HTTP factory.
+         */
+        fun clearCache(applicationContext: Context) {
+            val cache: SimpleCache = obtainCache(applicationContext)
+            val keys: Set<String> = cache.keys.toSet()
+            for (key in keys) {
+                cache.removeResource(key)
             }
         }
     }
