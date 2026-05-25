@@ -149,6 +149,7 @@ private fun ThumpApp() {
             PlaybackController(applicationContext)
         }
         DisposableEffect(playbackController) {
+            playbackController.connect()
             onDispose {
                 playbackController.release()
             }
