@@ -1,6 +1,7 @@
 package com.therobm.thump.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,7 @@ fun HomeScreen(
     subsonicClient: SubsonicClient,
     isPulseServer: Boolean,
     contentPadding: PaddingValues,
+    onItemTapped: (HomeCarouselItem) -> Unit,
     modifier: Modifier,
 ) {
     val repository = remember(subsonicClient, isPulseServer) {
@@ -84,6 +86,7 @@ fun HomeScreen(
             HomeSectionView(
                 section = section,
                 subsonicClient = subsonicClient,
+                onItemTapped = onItemTapped,
             )
         }
         item {
@@ -96,6 +99,7 @@ fun HomeScreen(
 private fun HomeSectionView(
     section: HomeSection,
     subsonicClient: SubsonicClient,
+    onItemTapped: (HomeCarouselItem) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -132,7 +136,11 @@ private fun HomeSectionView(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 } else {
-                    HomeCarouselRow(items = loadState.items, subsonicClient = subsonicClient)
+                    HomeCarouselRow(
+                        items = loadState.items,
+                        subsonicClient = subsonicClient,
+                        onItemTapped = onItemTapped,
+                    )
                 }
             }
         }
@@ -143,6 +151,7 @@ private fun HomeSectionView(
 private fun HomeCarouselRow(
     items: List<HomeCarouselItem>,
     subsonicClient: SubsonicClient,
+    onItemTapped: (HomeCarouselItem) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -150,7 +159,11 @@ private fun HomeCarouselRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items = items, key = { item -> item.kind.name + ":" + item.id }) { item ->
-            HomeCarouselTile(item = item, subsonicClient = subsonicClient)
+            HomeCarouselTile(
+                item = item,
+                subsonicClient = subsonicClient,
+                onTapped = { onItemTapped(item) },
+            )
         }
     }
 }
@@ -159,8 +172,13 @@ private fun HomeCarouselRow(
 private fun HomeCarouselTile(
     item: HomeCarouselItem,
     subsonicClient: SubsonicClient,
+    onTapped: () -> Unit,
 ) {
-    Column(modifier = Modifier.width(140.dp)) {
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .clickable(onClick = onTapped),
+    ) {
         val coverArtId = item.coverArtId
         val artUrl: String?
         if (coverArtId == null) {

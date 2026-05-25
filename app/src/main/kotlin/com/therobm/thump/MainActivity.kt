@@ -7,8 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -22,6 +24,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,8 +40,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.therobm.thump.home.HomeCarouselItem
+import com.therobm.thump.home.HomeItemKind
 import com.therobm.thump.home.HomeScreen
 import com.therobm.thump.library.LibraryScreen
+import com.therobm.thump.playback.MiniPlayer
+import com.therobm.thump.playback.NowPlaying
+import com.therobm.thump.playback.PlaybackController
 import com.therobm.thump.search.SearchScreen
 import com.therobm.thump.settings.SettingsScreen
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -72,6 +81,8 @@ private const val ROUTE_LIBRARY = "library"
 private const val ROUTE_SEARCH = "search"
 private const val ROUTE_SETTINGS = "settings"
 
+private const val MINI_PLAYER_ART_REQUEST_SIZE: Int = 150
+
 @Composable
 private fun ThumpApp() {
     ThumpTheme {
@@ -97,6 +108,36 @@ private fun ThumpApp() {
             buildSubsonicClient(httpClient, jsonDecoder, serverUrl, username, password, useTokenAuth)
         }
 
+        val applicationContext = context.applicationContext
+        val playbackController: PlaybackController = remember(applicationContext) {
+            PlaybackController(applicationContext)
+        }
+        DisposableEffect(playbackController) {
+            onDispose {
+                playbackController.release()
+            }
+        }
+        val nowPlaying: NowPlaying? by playbackController.nowPlaying.collectAsState()
+
+        val onHomeItemTapped: (HomeCarouselItem) -> Unit = { tappedItem: HomeCarouselItem ->
+            if (subsonicClient != null && tappedItem.kind == HomeItemKind.Track) {
+                val tappedCoverArtUrl: String?
+                val tappedCoverArtId = tappedItem.coverArtId
+                if (tappedCoverArtId == null) {
+                    tappedCoverArtUrl = null
+                } else {
+                    tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
+                }
+                playbackController.play(
+                    trackId = tappedItem.id,
+                    streamUrl = subsonicClient.buildStreamUrl(tappedItem.id),
+                    title = tappedItem.title,
+                    artist = tappedItem.subtitle,
+                    coverArtUrl = tappedCoverArtUrl,
+                )
+            }
+        }
+
         val navController = rememberNavController()
         val currentBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute: String?
@@ -112,18 +153,33 @@ private fun ThumpApp() {
                 .fillMaxSize()
                 .background(ThumpColors.Background),
             bottomBar = {
-                ThumpBottomBar(
-                    currentRoute = currentRoute,
-                    onTabSelected = { destinationRoute: String ->
-                        navController.navigate(destinationRoute) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    val nowPlayingSnapshot = nowPlaying
+                    if (nowPlayingSnapshot != null) {
+                        MiniPlayer(
+                            nowPlaying = nowPlayingSnapshot,
+                            onPlayPauseClicked = {
+                                if (nowPlayingSnapshot.isPlaying) {
+                                    playbackController.pause()
+                                } else {
+                                    playbackController.resume()
+                                }
+                            },
+                        )
+                    }
+                    ThumpBottomBar(
+                        currentRoute = currentRoute,
+                        onTabSelected = { destinationRoute: String ->
+                            navController.navigate(destinationRoute) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             },
             containerColor = ThumpColors.Background,
         ) { innerPadding: PaddingValues ->
@@ -140,6 +196,7 @@ private fun ThumpApp() {
                             subsonicClient = subsonicClient,
                             isPulseServer = isPulseServer,
                             contentPadding = innerPadding,
+                            onItemTapped = onHomeItemTapped,
                             modifier = Modifier,
                         )
                     }
