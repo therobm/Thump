@@ -34,7 +34,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
+import com.therobm.thump.art.CompositeArtTile
 import com.therobm.thump.subsonic.SubsonicClient
+import com.therobm.thump.subsonic.SubsonicResult
 import kotlinx.coroutines.launch
 
 /**
@@ -189,6 +191,11 @@ private fun HomeCarouselTile(
 
         if (item.kind == HomeItemKind.Artist) {
             ArtistTileArt(artUrl = artUrl)
+        } else if (item.kind == HomeItemKind.Playlist) {
+            PlaylistCompositeTile(
+                playlistId = item.id,
+                subsonicClient = subsonicClient,
+            )
         } else {
             RectangularTileArt(artUrl = artUrl)
         }
@@ -247,6 +254,40 @@ private fun ArtistTileArt(artUrl: String?) {
     }
 }
 
+@Composable
+private fun PlaylistCompositeTile(
+    playlistId: String,
+    subsonicClient: SubsonicClient,
+) {
+    var coverArtIds: List<String> by remember(playlistId) { mutableStateOf(emptyList()) }
+
+    LaunchedEffect(playlistId, subsonicClient) {
+        val result = subsonicClient.getPlaylist(playlistId)
+        if (result is SubsonicResult.Ok) {
+            val entries = result.value.entry
+            val ids = ArrayList<String>(entries.size)
+            val entryCount = entries.size
+            for (entryIndex in 0 until entryCount) {
+                val candidate = entries[entryIndex].coverArt
+                if (candidate != null) {
+                    ids.add(candidate)
+                }
+            }
+            coverArtIds = ids
+        }
+    }
+
+    val tileModifier = Modifier
+        .size(140.dp)
+        .clip(RoundedCornerShape(10.dp))
+    CompositeArtTile(
+        coverArtIds = coverArtIds,
+        subsonicClient = subsonicClient,
+        requestSizePx = COMPOSITE_QUADRANT_REQUEST_SIZE,
+        modifier = tileModifier,
+    )
+}
+
 private fun buildInitialSections(isPulseServer: Boolean): List<HomeSection> {
     val sections = ArrayList<HomeSection>(5)
     sections.add(HomeSection(HomeSectionKey.RecentlyPlayed, "Recently Played", HomeSectionLoadState.Loading))
@@ -277,3 +318,4 @@ private fun replaceSection(current: List<HomeSection>, replacement: HomeSection)
 }
 
 private const val COVER_ART_REQUEST_SIZE: Int = 300
+private const val COMPOSITE_QUADRANT_REQUEST_SIZE: Int = 150

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
+import com.therobm.thump.art.CompositeArtTile
 import com.therobm.thump.playback.PlaybackQueueItem
 import com.therobm.thump.playback.PlaybackSource
 import com.therobm.thump.playback.PlaybackSourceKind
@@ -113,12 +114,13 @@ private fun PlaylistDetailContent(
     subsonicClient: SubsonicClient,
     onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
-    val coverArtId = playlist.coverArt
-    val coverArtUrl: String?
-    if (coverArtId == null) {
-        coverArtUrl = null
-    } else {
-        coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, COVER_ART_REQUEST_SIZE)
+    val entryCoverArtIds = ArrayList<String>(playlist.entry.size)
+    val entryCount = playlist.entry.size
+    for (entryIndex in 0 until entryCount) {
+        val candidate = playlist.entry[entryIndex].coverArt
+        if (candidate != null) {
+            entryCoverArtIds.add(candidate)
+        }
     }
 
     LazyColumn(
@@ -137,16 +139,12 @@ private fun PlaylistDetailContent(
                     .fillMaxWidth(0.8f)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(ThumpColors.Surface)
-                if (coverArtUrl == null) {
-                    Box(modifier = artModifier)
-                } else {
-                    AsyncImage(
-                        model = coverArtUrl,
-                        contentDescription = null,
-                        modifier = artModifier,
-                    )
-                }
+                CompositeArtTile(
+                    coverArtIds = entryCoverArtIds,
+                    subsonicClient = subsonicClient,
+                    requestSizePx = COVER_ART_REQUEST_SIZE,
+                    modifier = artModifier,
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
