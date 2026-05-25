@@ -9,12 +9,14 @@ import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.therobm.thump.subsonic.PulseTopPlaylist
 import com.therobm.thump.subsonic.StandardAlbumDetailPayload
 import com.therobm.thump.subsonic.StandardAlbumSummary
 import com.therobm.thump.subsonic.StandardArtistDetailPayload
 import com.therobm.thump.subsonic.StandardLibraryArtist
 import com.therobm.thump.subsonic.StandardPlaylistDetailPayload
 import com.therobm.thump.subsonic.StandardPlaylistSummary
+import com.therobm.thump.subsonic.StandardSongDetail
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicResult
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +33,15 @@ private const val MEDIA_ID_PREFIX_PLAYLIST: String = "thump-root/playlist/"
 private const val MEDIA_ID_PREFIX_ALBUM: String = "thump-root/album/"
 private const val MEDIA_ID_PREFIX_ARTIST: String = "thump-root/artist/"
 private const val MEDIA_ID_PREFIX_TRACK: String = "thump-track/"
+// Synthetic playable IDs for the Play / Shuffle rows at the top of each album / playlist /
+// artist children list. Auto sends one of these through onAddMediaItems when tapped; we
+// resolve it to a full queue of real tracks and Auto plays the result in order.
+private const val MEDIA_ID_PREFIX_PLAY_ALBUM: String = "thump-action/play/album/"
+private const val MEDIA_ID_PREFIX_SHUFFLE_ALBUM: String = "thump-action/shuffle/album/"
+private const val MEDIA_ID_PREFIX_PLAY_PLAYLIST: String = "thump-action/play/playlist/"
+private const val MEDIA_ID_PREFIX_SHUFFLE_PLAYLIST: String = "thump-action/shuffle/playlist/"
+private const val MEDIA_ID_PREFIX_PLAY_ARTIST: String = "thump-action/play/artist/"
+private const val MEDIA_ID_PREFIX_SHUFFLE_ARTIST: String = "thump-action/shuffle/artist/"
 
 private const val HOME_SECTION_ITEM_LIMIT: Int = 15
 private const val RECENTS_TOTAL_LIMIT: Int = 15
@@ -64,6 +75,7 @@ private const val CONTENT_STYLE_GROUP_TITLE_HINT_KEY: String = "android.media.br
 class ThumpMediaLibraryCallback(
     private val applicationCoroutineScope: CoroutineScope,
     private val credentialsLoader: PlaybackCredentialsLoader,
+    private val applicationPackageName: String,
 ) : MediaLibrarySession.Callback {
 
     override fun onGetLibraryRoot(
@@ -152,7 +164,15 @@ class ThumpMediaLibraryCallback(
             val count = mediaItems.size
             for (index in 0 until count) {
                 val incoming = mediaItems[index]
-                val trackId = trackIdFromMediaId(incoming.mediaId)
+                val incomingId = incoming.mediaId
+                val expanded = expandActionMediaId(incomingId, subsonicClient)
+                if (expanded != null) {
+                    // Action row (Play / Shuffle) — fan out to the full queue. Auto plays the
+                    // first item and queues the rest.
+                    resolved.addAll(expanded)
+                    continue
+                }
+                val trackId = trackIdFromMediaId(incomingId)
                 if (trackId == null) {
                     resolved.add(incoming)
                 } else {
@@ -161,6 +181,234 @@ class ThumpMediaLibraryCallback(
             }
             resolved
         }
+    }
+
+    /**
+     * Resolve one of the synthetic Play / Shuffle action ids into the full queue of real
+     * playable MediaItems. Returns null when the id is not an action (regular track id, or any
+     * non-thump id).
+     */
+    private suspend fun expandActionMediaId(
+        mediaId: String,
+        subsonicClient: SubsonicClient,
+    ): List<MediaItem>? {
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_PLAY_ALBUM)) {
+            val albumId = mediaId.removePrefix(MEDIA_ID_PREFIX_PLAY_ALBUM)
+            return resolveAlbumQueue(albumId, subsonicClient, shuffle = false)
+        }
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_SHUFFLE_ALBUM)) {
+            val albumId = mediaId.removePrefix(MEDIA_ID_PREFIX_SHUFFLE_ALBUM)
+            return resolveAlbumQueue(albumId, subsonicClient, shuffle = true)
+        }
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_PLAY_PLAYLIST)) {
+            val playlistId = mediaId.removePrefix(MEDIA_ID_PREFIX_PLAY_PLAYLIST)
+            return resolvePlaylistQueue(playlistId, subsonicClient, shuffle = false)
+        }
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_SHUFFLE_PLAYLIST)) {
+            val playlistId = mediaId.removePrefix(MEDIA_ID_PREFIX_SHUFFLE_PLAYLIST)
+            return resolvePlaylistQueue(playlistId, subsonicClient, shuffle = true)
+        }
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_PLAY_ARTIST)) {
+            val artistId = mediaId.removePrefix(MEDIA_ID_PREFIX_PLAY_ARTIST)
+            return resolveArtistQueue(artistId, subsonicClient, shuffle = false)
+        }
+        if (mediaId.startsWith(MEDIA_ID_PREFIX_SHUFFLE_ARTIST)) {
+            val artistId = mediaId.removePrefix(MEDIA_ID_PREFIX_SHUFFLE_ARTIST)
+            return resolveArtistQueue(artistId, subsonicClient, shuffle = true)
+        }
+        return null
+    }
+
+    private suspend fun resolveAlbumQueue(
+        albumId: String,
+        subsonicClient: SubsonicClient,
+        shuffle: Boolean,
+    ): List<MediaItem> {
+        val result = subsonicClient.getAlbum(albumId)
+        if (result !is SubsonicResult.Ok) {
+            return emptyList()
+        }
+        val detail = result.value
+        val items = ArrayList<MediaItem>(detail.song.size)
+        val songCount = detail.song.size
+        for (index in 0 until songCount) {
+            val song = detail.song[index]
+            items.add(buildPlayableMediaItemForSongDetail(song, subsonicClient, fallbackAlbumName = detail.name))
+        }
+        if (shuffle) {
+            items.shuffle()
+        }
+        return items
+    }
+
+    private suspend fun resolvePlaylistQueue(
+        playlistId: String,
+        subsonicClient: SubsonicClient,
+        shuffle: Boolean,
+    ): List<MediaItem> {
+        val result = subsonicClient.getPlaylist(playlistId)
+        if (result !is SubsonicResult.Ok) {
+            return emptyList()
+        }
+        val detail = result.value
+        val items = ArrayList<MediaItem>(detail.entry.size)
+        val entryCount = detail.entry.size
+        for (index in 0 until entryCount) {
+            val song = detail.entry[index]
+            items.add(buildPlayableMediaItemForSongDetail(song, subsonicClient, fallbackAlbumName = song.album))
+        }
+        if (shuffle) {
+            items.shuffle()
+        }
+        return items
+    }
+
+    private suspend fun resolveArtistQueue(
+        artistId: String,
+        subsonicClient: SubsonicClient,
+        shuffle: Boolean,
+    ): List<MediaItem> {
+        val isPulse = credentialsLoader.loadIsPulseDetected()
+        if (isPulse) {
+            val pulseResult = subsonicClient.getPulseArtistTracks(artistId)
+            if (pulseResult !is SubsonicResult.Ok) {
+                return emptyList()
+            }
+            val tracks = pulseResult.value
+            val items = ArrayList<MediaItem>(tracks.size)
+            val trackCount = tracks.size
+            for (index in 0 until trackCount) {
+                val track = tracks[index]
+                items.add(
+                    buildPlayableMediaItemFromFields(
+                        trackId = track.id,
+                        title = track.title,
+                        artist = track.artist,
+                        album = track.album,
+                        coverArtId = track.coverArt,
+                        subsonicClient = subsonicClient,
+                    )
+                )
+            }
+            if (shuffle) {
+                items.shuffle()
+            }
+            return items
+        }
+        // Non-Pulse fallback: fan out getAlbum per album in the artist's album list and
+        // concatenate. Slower but correct.
+        val artistResult = subsonicClient.getArtist(artistId)
+        if (artistResult !is SubsonicResult.Ok) {
+            return emptyList()
+        }
+        val artistDetail = artistResult.value
+        val items = ArrayList<MediaItem>()
+        val albumCount = artistDetail.album.size
+        for (albumIndex in 0 until albumCount) {
+            val albumRef = artistDetail.album[albumIndex]
+            val albumResult = subsonicClient.getAlbum(albumRef.id)
+            if (albumResult !is SubsonicResult.Ok) {
+                continue
+            }
+            val albumDetail = albumResult.value
+            val songCount = albumDetail.song.size
+            for (songIndex in 0 until songCount) {
+                val song = albumDetail.song[songIndex]
+                items.add(
+                    buildPlayableMediaItemForSongDetail(
+                        song = song,
+                        subsonicClient = subsonicClient,
+                        fallbackAlbumName = albumDetail.name,
+                    )
+                )
+            }
+        }
+        if (shuffle) {
+            items.shuffle()
+        }
+        return items
+    }
+
+    private fun buildPlayableMediaItemForSongDetail(
+        song: StandardSongDetail,
+        subsonicClient: SubsonicClient,
+        fallbackAlbumName: String?,
+    ): MediaItem {
+        val albumLabel: String?
+        if (song.album != null) {
+            albumLabel = song.album
+        } else {
+            albumLabel = fallbackAlbumName
+        }
+        return buildPlayableMediaItemFromFields(
+            trackId = song.id,
+            title = song.title,
+            artist = song.artist,
+            album = albumLabel,
+            coverArtId = song.coverArt,
+            subsonicClient = subsonicClient,
+        )
+    }
+
+    private fun buildPlayableMediaItemFromFields(
+        trackId: String,
+        title: String,
+        artist: String?,
+        album: String?,
+        coverArtId: String?,
+        subsonicClient: SubsonicClient,
+    ): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder()
+            .setTitle(title)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+        if (artist != null) {
+            metadataBuilder.setArtist(artist)
+        }
+        if (album != null) {
+            metadataBuilder.setAlbumTitle(album)
+        }
+        if (coverArtId != null) {
+            metadataBuilder.setArtworkUri(
+                android.net.Uri.parse(subsonicClient.buildCoverArtUrl(coverArtId, COVER_ART_REQUEST_SIZE_PX))
+            )
+        }
+        return MediaItem.Builder()
+            .setMediaId(MEDIA_ID_PREFIX_TRACK + trackId)
+            .setUri(subsonicClient.buildStreamUrl(trackId))
+            .setMediaMetadata(metadataBuilder.build())
+            .build()
+    }
+
+    /**
+     * Build one of the Play / Shuffle action rows. The id is the synthetic action id; Auto
+     * sends it through onAddMediaItems when tapped and we expand it into the real queue there.
+     *
+     * iconResourceId is a local drawable (e.g. ic_action_play / ic_action_shuffle). We serve it
+     * to Auto via an `android.resource://...` URI so the row gets a recognizable verb icon
+     * instead of the contextual album / playlist cover.
+     */
+    private fun buildActionItem(
+        mediaId: String,
+        title: String,
+        iconResourceId: Int,
+    ): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder()
+            .setTitle(title)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            .setArtworkUri(buildResourceUri(iconResourceId))
+        return MediaItem.Builder()
+            .setMediaId(mediaId)
+            .setMediaMetadata(metadataBuilder.build())
+            .build()
+    }
+
+    private fun buildResourceUri(resourceId: Int): android.net.Uri {
+        val packageName = applicationPackageName
+        return android.net.Uri.parse("android.resource://" + packageName + "/" + resourceId)
     }
 
     private fun buildRootChildren(): ImmutableList<MediaItem> {
@@ -610,6 +858,20 @@ class ThumpMediaLibraryCallback(
         }
         val detail: StandardPlaylistDetailPayload = result.value
         val out = ImmutableList.builder<MediaItem>()
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_PLAY_PLAYLIST + playlistId,
+                title = "Play",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_play,
+            )
+        )
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_SHUFFLE_PLAYLIST + playlistId,
+                title = "Shuffle",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_shuffle,
+            )
+        )
         val entryCount = detail.entry.size
         for (i in 0 until entryCount) {
             val song = detail.entry[i]
@@ -644,6 +906,20 @@ class ThumpMediaLibraryCallback(
         }
         val detail: StandardAlbumDetailPayload = result.value
         val out = ImmutableList.builder<MediaItem>()
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_PLAY_ALBUM + albumId,
+                title = "Play",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_play,
+            )
+        )
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_SHUFFLE_ALBUM + albumId,
+                title = "Shuffle",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_shuffle,
+            )
+        )
         val songCount = detail.song.size
         for (i in 0 until songCount) {
             val song = detail.song[i]
@@ -678,6 +954,22 @@ class ThumpMediaLibraryCallback(
         }
         val detail: StandardArtistDetailPayload = result.value
         val out = ImmutableList.builder<MediaItem>()
+        // For artists we sample the first album's cover so the action rows have something
+        // identifiable next to them.
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_PLAY_ARTIST + artistId,
+                title = "Play",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_play,
+            )
+        )
+        out.add(
+            buildActionItem(
+                mediaId = MEDIA_ID_PREFIX_SHUFFLE_ARTIST + artistId,
+                title = "Shuffle",
+                iconResourceId = com.therobm.thump.R.drawable.ic_action_shuffle,
+            )
+        )
         val albumCount = detail.album.size
         for (i in 0 until albumCount) {
             val album = detail.album[i]

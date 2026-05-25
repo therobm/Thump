@@ -43,6 +43,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         val callback = ThumpMediaLibraryCallback(
             applicationCoroutineScope = serviceCoroutineScope,
             credentialsLoader = credentialsLoader,
+            applicationPackageName = applicationContext.packageName,
         )
         librarySession = MediaLibrarySession.Builder(this, player, callback).build()
     }
