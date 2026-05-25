@@ -2,6 +2,9 @@ package com.therobm.thump.playback
 
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -9,17 +12,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+private const val POSITION_TICK_INTERVAL_MS: Long = 5000L
+private const val SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS: Long = 4L * 60L * 1000L
 
 /**
  * Hosts the ExoPlayer plus the MediaLibrarySession that backs both the app's mini player and
- * Android Auto's media browser. Using the library-service variant (instead of plain
- * MediaSessionService) lets Auto request a browse tree from the same component without a second
- * service declaration.
+ * Android Auto's media browser. Owns playback persistence (queue + index + position) and
+ * Subsonic scrobble: submission=false on track start, submission=true at 50%/4min.
  *
- * Running playback inside a foreground service is what lets audio survive the user backgrounding
- * the app and gives Android the lock-screen / system notification surface to render transport
- * controls into. The app process connects to this service via a MediaController and never holds
- * the player directly.
+ * Resume-on-launch: on onCreate we restore the player's last persisted queue and seek to the
+ * saved position before any controller binds, so Auto's now-playing surfaces the resumed
+ * track immediately instead of an empty session.
  */
 class ThumpPlaybackService : MediaLibraryService() {
 
@@ -27,6 +34,17 @@ class ThumpPlaybackService : MediaLibraryService() {
     private val serviceCoroutineScope: CoroutineScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO,
     )
+
+    private val credentialsLoader: PlaybackCredentialsLoader by lazy {
+        PlaybackCredentialsLoader(applicationContext)
+    }
+    private val persistence: PlaybackPersistence by lazy {
+        PlaybackPersistence(applicationContext)
+    }
+
+    // Scrobble state for the currently-playing track. Reset on every media-item transition.
+    private var currentScrobbleTrackId: String? = null
+    private var hasSubmittedCurrent: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -39,13 +57,17 @@ class ThumpPlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        val credentialsLoader = PlaybackCredentialsLoader(applicationContext)
+        player.addListener(buildPlayerListener(player))
+
         val callback = ThumpMediaLibraryCallback(
             applicationCoroutineScope = serviceCoroutineScope,
             credentialsLoader = credentialsLoader,
             applicationPackageName = applicationContext.packageName,
         )
         librarySession = MediaLibrarySession.Builder(this, player, callback).build()
+
+        restorePersistedStateInto(player)
+        startPositionPersistenceLoop(player)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -55,11 +77,202 @@ class ThumpPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         val sessionSnapshot = librarySession
         if (sessionSnapshot != null) {
+            // Final position write so the next launch starts where this session ended.
+            persistCurrentPlayerState(sessionSnapshot.player)
             sessionSnapshot.player.release()
             sessionSnapshot.release()
             librarySession = null
         }
         serviceCoroutineScope.cancel()
         super.onDestroy()
+    }
+
+    private fun buildPlayerListener(player: Player): Player.Listener {
+        return object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val trackId = extractTrackId(mediaItem)
+                currentScrobbleTrackId = trackId
+                hasSubmittedCurrent = false
+                if (trackId != null) {
+                    fireScrobbleNowPlaying(trackId)
+                }
+                persistCurrentPlayerState(player)
+            }
+        }
+    }
+
+    private fun restorePersistedStateInto(player: Player) {
+        val persisted = persistence.load()
+        if (persisted == null) {
+            return
+        }
+        if (persisted.items.isEmpty()) {
+            return
+        }
+        val mediaItems = ArrayList<MediaItem>(persisted.items.size)
+        val itemCount = persisted.items.size
+        for (itemIndex in 0 until itemCount) {
+            val item = persisted.items[itemIndex]
+            mediaItems.add(buildMediaItemFromPersisted(item))
+        }
+        val safeIndex: Int
+        if (persisted.currentIndex < 0) {
+            safeIndex = 0
+        } else if (persisted.currentIndex >= mediaItems.size) {
+            safeIndex = mediaItems.size - 1
+        } else {
+            safeIndex = persisted.currentIndex
+        }
+        player.setMediaItems(mediaItems, safeIndex, persisted.positionMs)
+        player.prepare()
+        player.playWhenReady = false
+        currentScrobbleTrackId = persisted.items[safeIndex].trackId
+        hasSubmittedCurrent = false
+    }
+
+    private fun buildMediaItemFromPersisted(item: PersistedItem): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder()
+            .setTitle(item.title)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+        if (item.artist.isNotEmpty()) {
+            metadataBuilder.setArtist(item.artist)
+        }
+        if (item.album != null) {
+            metadataBuilder.setAlbumTitle(item.album)
+        }
+        val coverArtUrl = item.coverArtUrl
+        if (coverArtUrl != null) {
+            metadataBuilder.setArtworkUri(android.net.Uri.parse(coverArtUrl))
+        }
+        return MediaItem.Builder()
+            .setMediaId("thump-track/" + item.trackId)
+            .setUri(item.streamUrl)
+            .setMediaMetadata(metadataBuilder.build())
+            .build()
+    }
+
+    /**
+     * Ticker that runs while the service is alive. Persists the current player position and
+     * checks the scrobble-submission threshold (50% of duration, or 4 minutes, whichever
+     * first). Sleeps in 5s slices so the wakelock cost is negligible.
+     */
+    private fun startPositionPersistenceLoop(player: Player) {
+        serviceCoroutineScope.launch {
+            while (isActive) {
+                delay(POSITION_TICK_INTERVAL_MS)
+                if (!isActive) {
+                    break
+                }
+                if (player.isPlaying) {
+                    persistCurrentPlayerState(player)
+                    maybeFireScrobbleSubmission(player)
+                }
+            }
+        }
+    }
+
+    private fun maybeFireScrobbleSubmission(player: Player) {
+        if (hasSubmittedCurrent) {
+            return
+        }
+        val trackId = currentScrobbleTrackId
+        if (trackId == null) {
+            return
+        }
+        val position = player.currentPosition
+        val duration = player.duration
+        val threshold: Long
+        if (duration <= 0L) {
+            threshold = SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS
+        } else {
+            val halfDuration = duration / 2L
+            if (halfDuration < SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS) {
+                threshold = halfDuration
+            } else {
+                threshold = SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS
+            }
+        }
+        if (position < threshold) {
+            return
+        }
+        hasSubmittedCurrent = true
+        fireScrobbleSubmission(trackId)
+    }
+
+    private fun fireScrobbleNowPlaying(trackId: String) {
+        serviceCoroutineScope.launch {
+            val client = credentialsLoader.loadSubsonicClient()
+            if (client == null) {
+                return@launch
+            }
+            client.scrobble(trackId, submission = false)
+        }
+    }
+
+    private fun fireScrobbleSubmission(trackId: String) {
+        serviceCoroutineScope.launch {
+            val client = credentialsLoader.loadSubsonicClient()
+            if (client == null) {
+                return@launch
+            }
+            client.scrobble(trackId, submission = true)
+        }
+    }
+
+    private fun persistCurrentPlayerState(player: Player) {
+        val itemCount = player.mediaItemCount
+        if (itemCount <= 0) {
+            persistence.clear()
+            return
+        }
+        val previous = persistence.load()
+        // We need title/artist/album/streamUrl/coverArtUrl to round-trip. The player only knows
+        // titles via MediaMetadata; streamUrl and coverArtUrl are held in the previously
+        // persisted blob (or were just written by the app's PlaybackController on playQueue).
+        // Fall back to whatever's there; the player's setMediaItems was driven by that blob in
+        // the first place when the service restored.
+        if (previous == null) {
+            // No prior blob means the app called playQueue before we ran. PlaybackController
+            // wrote the blob then; we shouldn't be here without one, but guard anyway.
+            return
+        }
+        val updatedIndex: Int
+        val playerIndex = player.currentMediaItemIndex
+        if (playerIndex < 0) {
+            updatedIndex = 0
+        } else if (playerIndex >= previous.items.size) {
+            updatedIndex = previous.items.size - 1
+        } else {
+            updatedIndex = playerIndex
+        }
+        val positionMs: Long
+        val rawPosition = player.currentPosition
+        if (rawPosition < 0L) {
+            positionMs = 0L
+        } else {
+            positionMs = rawPosition
+        }
+        persistence.save(
+            PersistedPlaybackState(
+                items = previous.items,
+                currentIndex = updatedIndex,
+                positionMs = positionMs,
+                source = previous.source,
+            )
+        )
+    }
+
+    private fun extractTrackId(mediaItem: MediaItem?): String? {
+        if (mediaItem == null) {
+            return null
+        }
+        val mediaId = mediaItem.mediaId
+        val prefix = "thump-track/"
+        if (mediaId.startsWith(prefix)) {
+            return mediaId.removePrefix(prefix)
+        }
+        return null
     }
 }

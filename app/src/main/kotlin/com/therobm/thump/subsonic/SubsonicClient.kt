@@ -354,6 +354,20 @@ class SubsonicClient(
     }
 
     /**
+     * Calls /rest/scrobble. `submission=false` is the now-playing notification (sent when a
+     * track starts); `submission=true` is the play-count submission (sent at 50% played or
+     * 4 minutes, whichever first, per Subsonic convention).
+     */
+    suspend fun scrobble(trackId: String, submission: Boolean): SubsonicResult<Unit> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/scrobble",
+            extraQueryParameters = mapOf("id" to trackId, "submission" to submission.toString()),
+        ) { _ ->
+            Unit
+        }
+    }
+
+    /**
      * Build the authenticated URL for a /rest/stream request.
      *
      * Returned as a plain string so an audio player (Media3 ExoPlayer) can fetch it directly.

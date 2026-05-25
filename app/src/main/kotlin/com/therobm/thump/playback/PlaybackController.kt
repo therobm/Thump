@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 class PlaybackController(applicationContext: Context) {
 
     private val resolvedApplicationContext: Context = applicationContext.applicationContext
+    private val persistence: PlaybackPersistence = PlaybackPersistence(resolvedApplicationContext)
 
     private val nowPlayingFlow: MutableStateFlow<NowPlaying?> = MutableStateFlow(null)
     val nowPlaying: StateFlow<NowPlaying?> = nowPlayingFlow
@@ -65,6 +66,11 @@ class PlaybackController(applicationContext: Context) {
                     val controller = future.get()
                     controller.addListener(playerListener)
                     mediaController = controller
+                    // The service may have restored a saved queue into the player on its onCreate
+                    // (resume-on-launch). Mirror that state into our local metadata cache and
+                    // surface the current track to the UI so the mini player shows the resumed
+                    // track immediately without waiting for the user to start playback.
+                    hydrateFromPersistedState()
                 } catch (controllerBuildFailure: Exception) {
                     // No usable controller — keep mediaController null so UI calls become no-ops.
                 }
@@ -72,6 +78,44 @@ class PlaybackController(applicationContext: Context) {
             },
             MoreExecutors.directExecutor(),
         )
+    }
+
+    private fun hydrateFromPersistedState() {
+        val persisted = persistence.load()
+        if (persisted == null) {
+            return
+        }
+        val rehydratedItems = ArrayList<PlaybackQueueItem>(persisted.items.size)
+        val itemCount = persisted.items.size
+        for (itemIndex in 0 until itemCount) {
+            val item = persisted.items[itemIndex]
+            rehydratedItems.add(
+                PlaybackQueueItem(
+                    trackId = item.trackId,
+                    streamUrl = item.streamUrl,
+                    title = item.title,
+                    artist = item.artist,
+                    album = item.album,
+                    coverArtUrl = item.coverArtUrl,
+                )
+            )
+        }
+        currentQueueMetadata = rehydratedItems
+        val source = persisted.source
+        if (source == null) {
+            currentQueueSource = null
+        } else {
+            val kind: PlaybackSourceKind
+            when (source.kind) {
+                PlaybackSourceKind.Album.name -> kind = PlaybackSourceKind.Album
+                PlaybackSourceKind.Playlist.name -> kind = PlaybackSourceKind.Playlist
+                PlaybackSourceKind.Artist.name -> kind = PlaybackSourceKind.Artist
+                PlaybackSourceKind.Genre.name -> kind = PlaybackSourceKind.Genre
+                else -> kind = PlaybackSourceKind.Album
+            }
+            currentQueueSource = PlaybackSource(kind = kind, name = source.name)
+        }
+        publishNowPlayingFor(persisted.currentIndex, isPlayingHint = false)
     }
 
     /**
@@ -105,6 +149,11 @@ class PlaybackController(applicationContext: Context) {
         }
 
         controller.setMediaItems(mediaItems, safeStartIndex, 0L)
+
+        // Persist the new queue immediately so a cold launch on Auto picks up the same state,
+        // even if no track has played yet. Subsequent transitions and position ticks are
+        // persisted by the service.
+        persistCurrentQueueState(safeStartIndex, positionMs = 0L)
         controller.prepare()
         controller.playWhenReady = true
 
@@ -242,6 +291,39 @@ class PlaybackController(applicationContext: Context) {
         }
         val newIndex = controller.currentMediaItemIndex
         publishNowPlayingFor(newIndex, isPlayingHint = controller.isPlaying)
+    }
+
+    private fun persistCurrentQueueState(currentIndex: Int, positionMs: Long) {
+        val persistedItems = ArrayList<PersistedItem>(currentQueueMetadata.size)
+        val itemCount = currentQueueMetadata.size
+        for (itemIndex in 0 until itemCount) {
+            val item = currentQueueMetadata[itemIndex]
+            persistedItems.add(
+                PersistedItem(
+                    trackId = item.trackId,
+                    streamUrl = item.streamUrl,
+                    title = item.title,
+                    artist = item.artist,
+                    album = item.album,
+                    coverArtUrl = item.coverArtUrl,
+                )
+            )
+        }
+        val persistedSource: PersistedSource?
+        val source = currentQueueSource
+        if (source == null) {
+            persistedSource = null
+        } else {
+            persistedSource = PersistedSource(kind = source.kind.name, name = source.name)
+        }
+        persistence.save(
+            PersistedPlaybackState(
+                items = persistedItems,
+                currentIndex = currentIndex,
+                positionMs = positionMs,
+                source = persistedSource,
+            )
+        )
     }
 
     private fun publishNowPlayingFor(index: Int, isPlayingHint: Boolean) {
