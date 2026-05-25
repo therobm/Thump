@@ -5,36 +5,44 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.therobm.thump.home.HomeScreen
+import com.therobm.thump.library.LibraryScreen
+import com.therobm.thump.search.SearchScreen
+import com.therobm.thump.settings.SettingsScreen
 import com.therobm.thump.subsonic.SubsonicAuthMode
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicCredentials
-import com.therobm.thump.subsonic.SubsonicPingResult
-import com.therobm.thump.subsonic.SubsonicResult
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -52,160 +60,197 @@ class MainActivity : ComponentActivity() {
 private const val PREFS_NAME = "thump_settings"
 private const val PREFS_KEY_SERVER_URL = "server_url"
 private const val PREFS_KEY_USERNAME = "username"
-// TODO: encrypt the stored password (Android Keystore / EncryptedSharedPreferences) when the real
-// Settings screen lands. Plain SharedPreferences is fine for the test harness on a dev device.
+// TODO: encrypt the stored password (Android Keystore / EncryptedSharedPreferences) once the
+// settings UI grows beyond a dev-only test harness.
 private const val PREFS_KEY_PASSWORD = "password"
 private const val PREFS_KEY_USE_TOKEN_AUTH = "use_token_auth"
 private const val PREFS_KEY_PULSE_DETECTED_FOR_URL = "pulse_detected_for_url"
 private const val PREFS_KEY_PULSE_DETECTED_VALUE = "pulse_detected_value"
 
+private const val ROUTE_HOME = "home"
+private const val ROUTE_LIBRARY = "library"
+private const val ROUTE_SEARCH = "search"
+private const val ROUTE_SETTINGS = "settings"
+
 @Composable
 private fun ThumpApp() {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Scaffold { innerPadding ->
-                PingTestScreen(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .padding(16.dp)
+    ThumpTheme {
+        val context = LocalContext.current
+        val sharedPreferences: SharedPreferences = remember(context) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+
+        var serverUrl by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_SERVER_URL)) }
+        var username by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_USERNAME)) }
+        var password by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_PASSWORD)) }
+        var useTokenAuth by remember {
+            mutableStateOf(sharedPreferences.getBoolean(PREFS_KEY_USE_TOKEN_AUTH, true))
+        }
+        var isPulseServer by remember {
+            mutableStateOf(readCachedPulseDetection(sharedPreferences, serverUrl))
+        }
+
+        val httpClient: OkHttpClient = remember { buildHttpClient() }
+        val jsonDecoder: Json = remember { buildJsonDecoder() }
+
+        val subsonicClient: SubsonicClient? = remember(serverUrl, username, password, useTokenAuth) {
+            buildSubsonicClient(httpClient, jsonDecoder, serverUrl, username, password, useTokenAuth)
+        }
+
+        val navController = rememberNavController()
+        val currentBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute: String?
+        val backStackSnapshot = currentBackStackEntry
+        if (backStackSnapshot == null) {
+            currentRoute = null
+        } else {
+            currentRoute = backStackSnapshot.destination.route
+        }
+
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ThumpColors.Background),
+            bottomBar = {
+                ThumpBottomBar(
+                    currentRoute = currentRoute,
+                    onTabSelected = { destinationRoute: String ->
+                        navController.navigate(destinationRoute) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 )
+            },
+            containerColor = ThumpColors.Background,
+        ) { innerPadding: PaddingValues ->
+            NavHost(
+                navController = navController,
+                startDestination = ROUTE_HOME,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                composable(ROUTE_HOME) {
+                    if (subsonicClient == null) {
+                        ConfigurePrompt(innerPadding)
+                    } else {
+                        HomeScreen(
+                            subsonicClient = subsonicClient,
+                            isPulseServer = isPulseServer,
+                            contentPadding = innerPadding,
+                            modifier = Modifier,
+                        )
+                    }
+                }
+                composable(ROUTE_LIBRARY) {
+                    LibraryScreen(contentPadding = innerPadding, modifier = Modifier)
+                }
+                composable(ROUTE_SEARCH) {
+                    SearchScreen(contentPadding = innerPadding, modifier = Modifier)
+                }
+                composable(ROUTE_SETTINGS) {
+                    SettingsScreen(
+                        initialServerUrl = serverUrl,
+                        initialUsername = username,
+                        initialPassword = password,
+                        initialUseTokenAuth = useTokenAuth,
+                        httpClient = httpClient,
+                        jsonDecoder = jsonDecoder,
+                        contentPadding = innerPadding,
+                        onCredentialsUpdated = { newServerUrl: String, newUsername: String, newPassword: String, newUseTokenAuth: Boolean, detectedIsPulse: Boolean ->
+                            serverUrl = newServerUrl
+                            username = newUsername
+                            password = newPassword
+                            useTokenAuth = newUseTokenAuth
+                            isPulseServer = detectedIsPulse
+
+                            val editor = sharedPreferences.edit()
+                            editor.putString(PREFS_KEY_SERVER_URL, newServerUrl)
+                            editor.putString(PREFS_KEY_USERNAME, newUsername)
+                            editor.putString(PREFS_KEY_PASSWORD, newPassword)
+                            editor.putBoolean(PREFS_KEY_USE_TOKEN_AUTH, newUseTokenAuth)
+                            editor.putString(PREFS_KEY_PULSE_DETECTED_FOR_URL, newServerUrl)
+                            editor.putBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, detectedIsPulse)
+                            editor.apply()
+                        },
+                        modifier = Modifier,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PingTestScreen(modifier: Modifier) {
-    val context = LocalContext.current
-    val sharedPreferences: SharedPreferences = remember(context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    }
-
-    var serverUrl by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_SERVER_URL)) }
-    var username by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_USERNAME)) }
-    var password by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_PASSWORD)) }
-    var useTokenAuth by remember {
-        mutableStateOf(sharedPreferences.getBoolean(PREFS_KEY_USE_TOKEN_AUTH, true))
-    }
-
-    val initialCachedPulseLine: String
-    val cachedPulseUrl = sharedPreferences.getString(PREFS_KEY_PULSE_DETECTED_FOR_URL, null)
-    if (cachedPulseUrl != null && cachedPulseUrl == serverUrl.trim()) {
-        val cachedPulseValue = sharedPreferences.getBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, false)
-        initialCachedPulseLine = "Cached Pulse detection for this URL: " + cachedPulseValue
-    } else {
-        initialCachedPulseLine = "No cached Pulse detection for this URL yet"
-    }
-    var resultText by remember { mutableStateOf(initialCachedPulseLine) }
-    var isPinging by remember { mutableStateOf(false) }
-
-    val coroutineScope = rememberCoroutineScope()
-
-    Column(
-        modifier = modifier
+private fun ConfigurePrompt(contentPadding: PaddingValues) {
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(ThumpColors.Background)
+            .padding(contentPadding)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text = "Thump - ping test", style = MaterialTheme.typography.titleLarge)
-
-        OutlinedTextField(
-            value = serverUrl,
-            onValueChange = { newValue: String -> serverUrl = newValue },
-            label = { Text(text = "Server URL (e.g. https://music.example.com)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+        Text(
+            text = "Open Settings to connect to your music server.",
+            color = ThumpColors.TextSecondary,
         )
-        OutlinedTextField(
-            value = username,
-            onValueChange = { newValue: String -> username = newValue },
-            label = { Text(text = "Username") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { newValue: String -> password = newValue },
-            label = { Text(text = "Password") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        FilterChip(
-            selected = useTokenAuth,
-            onClick = { useTokenAuth = !useTokenAuth },
-            label = {
-                if (useTokenAuth) {
-                    Text(text = "Auth: token (recommended)")
-                } else {
-                    Text(text = "Auth: legacy password")
-                }
-            },
-        )
-
-        Button(
-            enabled = !isPinging && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
-            onClick = {
-                isPinging = true
-                resultText = "pinging..."
-
-                val trimmedServerUrl = serverUrl.trim()
-                val trimmedUsername = username.trim()
-
-                val editor = sharedPreferences.edit()
-                editor.putString(PREFS_KEY_SERVER_URL, trimmedServerUrl)
-                editor.putString(PREFS_KEY_USERNAME, trimmedUsername)
-                editor.putString(PREFS_KEY_PASSWORD, password)
-                editor.putBoolean(PREFS_KEY_USE_TOKEN_AUTH, useTokenAuth)
-                editor.apply()
-
-                val credentials = SubsonicCredentials(
-                    serverUrl = trimmedServerUrl,
-                    username = trimmedUsername,
-                    password = password,
-                )
-                val authMode: SubsonicAuthMode
-                if (useTokenAuth) {
-                    authMode = SubsonicAuthMode.Token
-                } else {
-                    authMode = SubsonicAuthMode.Legacy
-                }
-                val client = SubsonicClient(
-                    okHttpClient = buildPingTestHttpClient(),
-                    jsonDecoder = buildPingTestJsonDecoder(),
-                    credentials = credentials,
-                    authMode = authMode,
-                )
-                coroutineScope.launch {
-                    val pingResult = client.ping()
-                    val pingDisplay = formatPingResult(pingResult)
-
-                    if (pingResult is SubsonicResult.Ok) {
-                        val probeResult = client.probePulseExtensions()
-                        val probeDisplay = formatProbeResult(probeResult)
-
-                        if (probeResult is SubsonicResult.Ok) {
-                            val probeEditor = sharedPreferences.edit()
-                            probeEditor.putString(PREFS_KEY_PULSE_DETECTED_FOR_URL, trimmedServerUrl)
-                            probeEditor.putBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, probeResult.value)
-                            probeEditor.apply()
-                        }
-
-                        resultText = pingDisplay + "\n\n" + probeDisplay
-                    } else {
-                        resultText = pingDisplay
-                    }
-
-                    isPinging = false
-                }
-            },
-        ) {
-            Text(text = "Ping")
-        }
-
-        Text(text = resultText)
     }
+}
+
+@Composable
+private fun ThumpBottomBar(
+    currentRoute: String?,
+    onTabSelected: (String) -> Unit,
+) {
+    NavigationBar(
+        containerColor = ThumpColors.Surface,
+        contentColor = ThumpColors.OnSurface,
+    ) {
+        val tabs = listOf(
+            BottomNavTab(ROUTE_HOME, "Home", Icons.Filled.Home),
+            BottomNavTab(ROUTE_LIBRARY, "Library", Icons.Filled.LibraryMusic),
+            BottomNavTab(ROUTE_SEARCH, "Search", Icons.Filled.Search),
+            BottomNavTab(ROUTE_SETTINGS, "Settings", Icons.Filled.Settings),
+        )
+        val tabCount = tabs.size
+        for (tabIndex in 0 until tabCount) {
+            val tab = tabs[tabIndex]
+            val isSelected: Boolean = isTabSelected(currentRoute, tab.route)
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = {
+                    if (!isSelected) {
+                        onTabSelected(tab.route)
+                    }
+                },
+                icon = { Icon(imageVector = tab.icon, contentDescription = tab.label) },
+                label = { Text(text = tab.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = ThumpColors.Accent,
+                    selectedTextColor = ThumpColors.Accent,
+                    unselectedIconColor = ThumpColors.TextSecondary,
+                    unselectedTextColor = ThumpColors.TextSecondary,
+                    indicatorColor = ThumpColors.SurfaceElevated,
+                ),
+            )
+        }
+    }
+}
+
+private data class BottomNavTab(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+)
+
+private fun isTabSelected(currentRoute: String?, tabRoute: String): Boolean {
+    if (currentRoute == null) {
+        return false
+    }
+    return currentRoute == tabRoute
 }
 
 private fun readStringOrBlank(sharedPreferences: SharedPreferences, key: String): String {
@@ -216,9 +261,20 @@ private fun readStringOrBlank(sharedPreferences: SharedPreferences, key: String)
     return storedValue
 }
 
-private fun buildPingTestHttpClient(): OkHttpClient {
+private fun readCachedPulseDetection(sharedPreferences: SharedPreferences, currentServerUrl: String): Boolean {
+    val cachedFor = sharedPreferences.getString(PREFS_KEY_PULSE_DETECTED_FOR_URL, null)
+    if (cachedFor == null) {
+        return false
+    }
+    if (cachedFor != currentServerUrl.trim()) {
+        return false
+    }
+    return sharedPreferences.getBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, false)
+}
+
+private fun buildHttpClient(): OkHttpClient {
     val loggingInterceptor = HttpLoggingInterceptor()
-    loggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+    loggingInterceptor.level = HttpLoggingInterceptor.Level.BASIC
     return OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -226,65 +282,37 @@ private fun buildPingTestHttpClient(): OkHttpClient {
         .build()
 }
 
-private fun buildPingTestJsonDecoder(): Json {
+private fun buildJsonDecoder(): Json {
     return Json {
         ignoreUnknownKeys = true
     }
 }
 
-private fun formatPingResult(result: SubsonicResult<SubsonicPingResult>): String {
-    when (result) {
-        is SubsonicResult.Ok -> {
-            val value = result.value
-            val serverTypeText: String
-            if (value.serverType == null) {
-                serverTypeText = "(unknown)"
-            } else {
-                serverTypeText = value.serverType
-            }
-            val serverVersionText: String
-            if (value.serverVersion == null) {
-                serverVersionText = "(unknown)"
-            } else {
-                serverVersionText = value.serverVersion
-            }
-            return buildString {
-                append("Ping OK\n")
-                append("protocol: ").append(value.protocolVersion).append('\n')
-                append("server type: ").append(serverTypeText).append('\n')
-                append("server version: ").append(serverVersionText).append('\n')
-                append("OpenSubsonic: ").append(value.isOpenSubsonicServer)
-            }
-        }
-        is SubsonicResult.ServerError -> {
-            return "Ping server error " + result.code + ": " + result.message
-        }
-        is SubsonicResult.TransportError -> {
-            return "Ping transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
-        }
-        is SubsonicResult.MalformedResponse -> {
-            return "Ping malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
-        }
+private fun buildSubsonicClient(
+    httpClient: OkHttpClient,
+    jsonDecoder: Json,
+    serverUrl: String,
+    username: String,
+    password: String,
+    useTokenAuth: Boolean,
+): SubsonicClient? {
+    if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+        return null
     }
-}
-
-private fun formatProbeResult(result: SubsonicResult<Boolean>): String {
-    when (result) {
-        is SubsonicResult.Ok -> {
-            if (result.value) {
-                return "Pulse extensions: DETECTED"
-            } else {
-                return "Pulse extensions: not present (standard OpenSubsonic server)"
-            }
-        }
-        is SubsonicResult.ServerError -> {
-            return "Pulse probe server error " + result.code + ": " + result.message
-        }
-        is SubsonicResult.TransportError -> {
-            return "Pulse probe transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
-        }
-        is SubsonicResult.MalformedResponse -> {
-            return "Pulse probe malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
-        }
+    val authMode: SubsonicAuthMode
+    if (useTokenAuth) {
+        authMode = SubsonicAuthMode.Token
+    } else {
+        authMode = SubsonicAuthMode.Legacy
     }
+    return SubsonicClient(
+        okHttpClient = httpClient,
+        jsonDecoder = jsonDecoder,
+        credentials = SubsonicCredentials(
+            serverUrl = serverUrl.trim(),
+            username = username.trim(),
+            password = password,
+        ),
+        authMode = authMode,
+    )
 }
