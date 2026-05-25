@@ -202,6 +202,10 @@ fun NowPlayingScreen(
                     val pendingDrag = dragPositionMs
                     if (pendingDrag != null) {
                         playbackController.seekTo(pendingDrag)
+                        // Optimistically advance the polled position to the seek target so the
+                        // slider does not visibly snap back to the old position while waiting
+                        // for the next 500ms poll to confirm.
+                        actualPositionMs = pendingDrag
                         dragPositionMs = null
                     }
                 },
