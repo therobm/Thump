@@ -173,6 +173,40 @@ class SubsonicClient(
     }
 
     /**
+     * Calls /rest/getArtists and returns the alphabetically-indexed list of artists.
+     */
+    suspend fun getArtists(): SubsonicResult<StandardArtistsPayload> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getArtists",
+            extraQueryParameters = emptyMap(),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.artists
+            if (payload == null) {
+                StandardArtistsPayload()
+            } else {
+                payload
+            }
+        }
+    }
+
+    /**
+     * Calls /rest/getGenres and returns the genre list with per-genre song/album counts.
+     */
+    suspend fun getGenres(): SubsonicResult<List<StandardGenre>> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getGenres",
+            extraQueryParameters = emptyMap(),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.genres
+            if (payload == null) {
+                emptyList<StandardGenre>()
+            } else {
+                payload.genre
+            }
+        }
+    }
+
+    /**
      * Calls /rest/getArtist and returns the artist with their albums.
      */
     suspend fun getArtist(artistId: String): SubsonicResult<StandardArtistDetailPayload> {

@@ -234,7 +234,24 @@ private fun ThumpApp() {
                     }
                 }
                 composable(ROUTE_LIBRARY) {
-                    LibraryScreen(contentPadding = innerPadding, modifier = Modifier)
+                    if (subsonicClient == null) {
+                        ConfigurePrompt(innerPadding)
+                    } else {
+                        LibraryScreen(
+                            subsonicClient = subsonicClient,
+                            onArtistSelected = { artistId: String ->
+                                navController.navigate(buildArtistRoute(artistId))
+                            },
+                            onAlbumSelected = { albumId: String ->
+                                navController.navigate(buildAlbumRoute(albumId))
+                            },
+                            onPlaylistSelected = { playlistId: String ->
+                                navController.navigate(buildPlaylistRoute(playlistId))
+                            },
+                            contentPadding = innerPadding,
+                            modifier = Modifier,
+                        )
+                    }
                 }
                 composable(ROUTE_SEARCH) {
                     SearchScreen(contentPadding = innerPadding, modifier = Modifier)
