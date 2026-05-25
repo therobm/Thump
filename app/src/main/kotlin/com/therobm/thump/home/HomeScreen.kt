@@ -212,10 +212,18 @@ private fun HomeCarouselTile(
         if (item.kind == HomeItemKind.Artist) {
             ArtistTileArt(artUrl = artUrl)
         } else if (item.kind == HomeItemKind.Playlist) {
-            PlaylistCompositeTile(
-                playlistId = item.id,
-                subsonicClient = subsonicClient,
-            )
+            // When the playlist already carries a coverArt id (Pulse's pl-<id> composite is
+            // returned from pulse/topPlaylists), render it as a single-image tile. Fall back to
+            // the on-device 2x2 stitcher only when no art is available — non-Pulse servers or
+            // playlists that have no resolvable composite.
+            if (artUrl != null) {
+                RectangularTileArt(artUrl = artUrl)
+            } else {
+                PlaylistCompositeTile(
+                    playlistId = item.id,
+                    subsonicClient = subsonicClient,
+                )
+            }
         } else {
             RectangularTileArt(artUrl = artUrl)
         }

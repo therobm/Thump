@@ -57,6 +57,15 @@ data class PulseTopPlaylistsResponse(
     val playlists: List<PulseTopPlaylist>,
 )
 
+/**
+ * pulse/recentPlaylists shares the per-item shape with pulse/topPlaylists — only the wrapper
+ * field is reused. Element type is therefore shared.
+ */
+@Serializable
+data class PulseRecentPlaylistsResponse(
+    val playlists: List<PulseTopPlaylist>,
+)
+
 @Serializable
 data class PulseTopPlaylist(
     val id: String,
@@ -65,4 +74,5 @@ data class PulseTopPlaylist(
     val duration: Int? = null,
     val score: Float? = null,
     val lastPlayed: String? = null,
+    val coverArt: String? = null,
 )

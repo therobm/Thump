@@ -114,13 +114,22 @@ private fun PlaylistDetailContent(
     subsonicClient: SubsonicClient,
     onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
-    val entryCoverArtIds = ArrayList<String>(playlist.entry.size)
-    val entryCount = playlist.entry.size
-    for (entryIndex in 0 until entryCount) {
-        val candidate = playlist.entry[entryIndex].coverArt
-        if (candidate != null) {
-            entryCoverArtIds.add(candidate)
+    // Prefer the playlist's own coverArt when the server supplies one (Pulse hands us its
+     // pl-<id> server-generated composite). Fall back to the on-device 2x2 stitch from the
+     // entries' covers only when the playlist itself has no art.
+    val headerCoverArtIds: List<String>
+    if (playlist.coverArt != null) {
+        headerCoverArtIds = listOf(playlist.coverArt)
+    } else {
+        val stitched = ArrayList<String>(playlist.entry.size)
+        val entryCount = playlist.entry.size
+        for (entryIndex in 0 until entryCount) {
+            val candidate = playlist.entry[entryIndex].coverArt
+            if (candidate != null) {
+                stitched.add(candidate)
+            }
         }
+        headerCoverArtIds = stitched
     }
 
     LazyColumn(
@@ -140,7 +149,7 @@ private fun PlaylistDetailContent(
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(12.dp))
                 CompositeArtTile(
-                    coverArtIds = entryCoverArtIds,
+                    coverArtIds = headerCoverArtIds,
                     subsonicClient = subsonicClient,
                     requestSizePx = COVER_ART_REQUEST_SIZE,
                     modifier = artModifier,

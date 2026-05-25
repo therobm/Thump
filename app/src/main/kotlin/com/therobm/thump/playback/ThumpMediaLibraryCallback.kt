@@ -302,32 +302,13 @@ class ThumpMediaLibraryCallback(
             if (topResult !is SubsonicResult.Ok) {
                 return emptyList()
             }
-            val allPlaylistsResult = subsonicClient.getPlaylists()
-            val playlistsById = HashMap<String, StandardPlaylistSummary>()
-            if (allPlaylistsResult is SubsonicResult.Ok) {
-                val all = allPlaylistsResult.value
-                val allCount = all.size
-                for (index in 0 until allCount) {
-                    playlistsById[all[index].id] = all[index]
-                }
-            }
+            // pulse/topPlaylists now carries the pl-<id> coverArt directly (Pulse PR #34) and
+            // its other fields (songCount, duration) match what the tile needs. No cross-
+            // reference to /rest/getPlaylists needed any more.
             val ranked = topResult.value
             val rankedCount = ranked.size
             for (index in 0 until rankedCount) {
-                val rankedPlaylist = ranked[index]
-                val matched = playlistsById[rankedPlaylist.id]
-                if (matched != null) {
-                    summariesInDisplayOrder.add(matched)
-                } else {
-                    summariesInDisplayOrder.add(
-                        StandardPlaylistSummary(
-                            id = rankedPlaylist.id,
-                            name = rankedPlaylist.name,
-                            songCount = rankedPlaylist.songCount,
-                            duration = rankedPlaylist.duration,
-                        )
-                    )
-                }
+                summariesInDisplayOrder.add(pulsePlaylistToSummary(ranked[index]))
             }
         } else {
             val result = subsonicClient.getPlaylists()
@@ -344,8 +325,22 @@ class ThumpMediaLibraryCallback(
                 summariesInDisplayOrder.add(result.value[index])
             }
         }
-        val tiles = resolvePlaylistTilesInParallel(summariesInDisplayOrder, subsonicClient)
+        val tiles = ArrayList<MediaItem>(summariesInDisplayOrder.size)
+        val summaryCount = summariesInDisplayOrder.size
+        for (index in 0 until summaryCount) {
+            tiles.add(playlistToBrowseable(summariesInDisplayOrder[index], subsonicClient))
+        }
         return tagWithGroupTitle(tiles, sectionTitle)
+    }
+
+    private fun pulsePlaylistToSummary(pulsePlaylist: PulseTopPlaylist): StandardPlaylistSummary {
+        return StandardPlaylistSummary(
+            id = pulsePlaylist.id,
+            name = pulsePlaylist.name,
+            songCount = pulsePlaylist.songCount,
+            duration = pulsePlaylist.duration,
+            coverArt = pulsePlaylist.coverArt,
+        )
     }
 
     private suspend fun fetchPopularOrFrequentSection(
@@ -458,36 +453,6 @@ class ThumpMediaLibraryCallback(
         return out
     }
 
-    /**
-     * Build the playlist tile list with first-track-art fallback for each tile, running the per-
-     * playlist getPlaylist calls in parallel. Used by both the Home Playlists shelf and the full
-     * alphabetical Playlists tab so they all show some image instead of a blank tile until the
-     * server-side composite from Pulse #143 lands.
-     */
-    private suspend fun resolvePlaylistTilesInParallel(
-        playlists: List<StandardPlaylistSummary>,
-        subsonicClient: SubsonicClient,
-    ): List<MediaItem> {
-        if (playlists.isEmpty()) {
-            return emptyList()
-        }
-        return coroutineScope {
-            val deferreds = ArrayList<kotlinx.coroutines.Deferred<MediaItem>>(playlists.size)
-            val count = playlists.size
-            for (index in 0 until count) {
-                val playlistAtIndex = playlists[index]
-                deferreds.add(async {
-                    playlistToBrowseableWithFallbackArt(playlistAtIndex, subsonicClient)
-                })
-            }
-            val tiles = ArrayList<MediaItem>(playlists.size)
-            val deferredCount = deferreds.size
-            for (deferredIndex in 0 until deferredCount) {
-                tiles.add(deferreds[deferredIndex].await())
-            }
-            tiles
-        }
-    }
 
     /**
      * Recents: mixed recently-touched playlists and artists.
@@ -542,41 +507,15 @@ class ThumpMediaLibraryCallback(
         }
 
         val recentPlaylists = ArrayList<StandardPlaylistSummary>()
-        val topPlaylistsResult = subsonicClient.getPulseTopPlaylists(RECENTS_TOTAL_LIMIT)
-        if (topPlaylistsResult is SubsonicResult.Ok) {
-            // pulse/topPlaylists doesn't return the StandardPlaylistSummary shape, just id +
-            // name + counts. Re-fetch the playlist list once to gain coverArt and to sort by
-            // a stable lastPlayed-ish proxy (we don't have lastPlayed on standard
-            // StandardPlaylistSummary). Order is whatever pulse/topPlaylists returned, which
-            // already ranks by recent listening.
-            val allPlaylistsResult = subsonicClient.getPlaylists()
-            val playlistsById = HashMap<String, StandardPlaylistSummary>()
-            if (allPlaylistsResult is SubsonicResult.Ok) {
-                val allPlaylists = allPlaylistsResult.value
-                val allPlaylistsCount = allPlaylists.size
-                for (index in 0 until allPlaylistsCount) {
-                    playlistsById[allPlaylists[index].id] = allPlaylists[index]
-                }
-            }
-            val rankedPlaylists = topPlaylistsResult.value
+        val recentPlaylistsResult = subsonicClient.getPulseRecentPlaylists(RECENTS_TOTAL_LIMIT)
+        if (recentPlaylistsResult is SubsonicResult.Ok) {
+            // pulse/recentPlaylists sorts by lastPlayed and carries the pl-<id> coverArt
+            // already, so the tile builder doesn't need to fetch playlist details to produce
+            // an image (Pulse PR #34, Flatline #151 + #143).
+            val rankedPlaylists = recentPlaylistsResult.value
             val rankedCount = rankedPlaylists.size
             for (index in 0 until rankedCount) {
-                val ranked = rankedPlaylists[index]
-                val matched = playlistsById[ranked.id]
-                if (matched != null) {
-                    recentPlaylists.add(matched)
-                } else {
-                    // Fall back to a synthetic summary so the row still renders if the user has
-                    // a top playlist that getPlaylists somehow didn't list.
-                    recentPlaylists.add(
-                        StandardPlaylistSummary(
-                            id = ranked.id,
-                            name = ranked.name,
-                            songCount = ranked.songCount,
-                            duration = ranked.duration,
-                        )
-                    )
-                }
+                recentPlaylists.add(pulsePlaylistToSummary(rankedPlaylists[index]))
             }
         }
 
@@ -587,7 +526,7 @@ class ThumpMediaLibraryCallback(
             if (emitted >= RECENTS_TOTAL_LIMIT) {
                 break
             }
-            combined.add(playlistToBrowseableWithFallbackArt(recentPlaylists[index], subsonicClient))
+            combined.add(playlistToBrowseable(recentPlaylists[index], subsonicClient))
             emitted++
         }
         val artistEmitCount = orderedRecentArtists.size
@@ -630,12 +569,12 @@ class ThumpMediaLibraryCallback(
         playlists.sortWith(Comparator { left: StandardPlaylistSummary, right: StandardPlaylistSummary ->
             left.name.compareTo(right.name, ignoreCase = true)
         })
-        // Per-tile fallback art (first track's coverArt) so the Playlists tab in Auto isn't a
-        // wall of blank tiles. Fired in parallel — N getPlaylist calls fan out and the whole
-        // batch resolves before we hand the list back to Auto. Caller-imposed cap of
-        // PLAYLISTS_FETCH_LIMIT bounds the fan-out.
-        val tiles = resolvePlaylistTilesInParallel(playlists, subsonicClient)
-        return LibraryResult.ofItemList(ImmutableList.copyOf(tiles), params)
+        val tiles = ImmutableList.builder<MediaItem>()
+        val playlistCount = playlists.size
+        for (index in 0 until playlistCount) {
+            tiles.add(playlistToBrowseable(playlists[index], subsonicClient))
+        }
+        return LibraryResult.ofItemList(tiles.build(), params)
     }
 
     private suspend fun buildArtistsChildren(
@@ -788,6 +727,14 @@ class ThumpMediaLibraryCallback(
         return out.build()
     }
 
+    /**
+     * Build the browseable tile for a playlist.
+     *
+     * All Pulse playlist endpoints (/rest/getPlaylists, /rest/getPlaylist, pulse/topPlaylists,
+     * pulse/recentPlaylists) carry the pl-<id> server-generated composite in `coverArt`. Other
+     * OpenSubsonic servers that don't populate `coverArt` get a blank tile until they expose
+     * their own composite mechanism.
+     */
     private fun playlistToBrowseable(
         playlist: StandardPlaylistSummary,
         subsonicClient: SubsonicClient,
@@ -805,49 +752,6 @@ class ThumpMediaLibraryCallback(
             subtitle = null,
             artUri = coverArtUrl,
         )
-    }
-
-    /**
-     * Playlist tile with the first-track cover art as a fallback when the playlist itself has
-     * no coverArt. This is the workaround for Pulse not generating a server-side composite
-     * (tracked in Flatline Pulse #143) — Auto can't compose 4-up tiles on the fly the way the
-     * phone Compose UI can, so a single representative cover beats a blank tile. Only called
-     * from the small shelves (Home / Recents) since it fires a per-tile getPlaylist call.
-     */
-    private suspend fun playlistToBrowseableWithFallbackArt(
-        playlist: StandardPlaylistSummary,
-        subsonicClient: SubsonicClient,
-    ): MediaItem {
-        val resolvedArtUrl = resolvePlaylistArtUrl(playlist, subsonicClient)
-        return buildBrowseableItem(
-            mediaId = MEDIA_ID_PREFIX_PLAYLIST + playlist.id,
-            title = playlist.name,
-            subtitle = null,
-            artUri = resolvedArtUrl,
-        )
-    }
-
-    private suspend fun resolvePlaylistArtUrl(
-        playlist: StandardPlaylistSummary,
-        subsonicClient: SubsonicClient,
-    ): String? {
-        val ownCoverArtId = playlist.coverArt
-        if (ownCoverArtId != null) {
-            return subsonicClient.buildCoverArtUrl(ownCoverArtId, COVER_ART_REQUEST_SIZE_PX)
-        }
-        val detailResult = subsonicClient.getPlaylist(playlist.id)
-        if (detailResult !is SubsonicResult.Ok) {
-            return null
-        }
-        val entries = detailResult.value.entry
-        val entryCount = entries.size
-        for (entryIndex in 0 until entryCount) {
-            val candidateCoverArtId = entries[entryIndex].coverArt
-            if (candidateCoverArtId != null) {
-                return subsonicClient.buildCoverArtUrl(candidateCoverArtId, COVER_ART_REQUEST_SIZE_PX)
-            }
-        }
-        return null
     }
 
     private fun artistToBrowseable(

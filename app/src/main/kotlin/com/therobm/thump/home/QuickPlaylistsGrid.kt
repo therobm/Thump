@@ -168,9 +168,23 @@ private fun QuickPlaylistTile(
     onQuickPlayClicked: () -> Unit,
     modifier: Modifier,
 ) {
-    var entryCoverArtIds: List<String> by remember(playlist.id) { mutableStateOf(emptyList()) }
+    // Prefer the playlist's own coverArt when the server supplies one (Pulse's pl-<id>
+    // composite once Pulse exposes it on /rest/getPlaylists; any future server doing the same).
+    // Fall back to the on-device 2x2 stitch from entry covers when it's absent.
+    var entryCoverArtIds: List<String> by remember(playlist.id) {
+        val initial: List<String>
+        if (playlist.coverArt != null) {
+            initial = listOf(playlist.coverArt)
+        } else {
+            initial = emptyList()
+        }
+        mutableStateOf(initial)
+    }
 
     LaunchedEffect(playlist.id, subsonicClient) {
+        if (playlist.coverArt != null) {
+            return@LaunchedEffect
+        }
         val result = subsonicClient.getPlaylist(playlist.id)
         if (result is SubsonicResult.Ok) {
             val entries = result.value.entry

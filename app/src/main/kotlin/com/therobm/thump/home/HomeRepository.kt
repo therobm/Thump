@@ -228,13 +228,16 @@ class HomeRepository(
             } else {
                 subtitle = playlist.songCount.toString() + " tracks"
             }
+            // pulse/topPlaylists carries the pl-<id> composite coverArt directly (Pulse PR
+             // #34), so consume it as-is. The phone carousel tile builder feeds whatever
+             // coverArtId we hand it into getCoverArt.
             mapped.add(
                 HomeCarouselItem(
                     id = playlist.id,
                     kind = HomeItemKind.Playlist,
                     title = playlist.name,
                     subtitle = subtitle,
-                    coverArtId = null,
+                    coverArtId = playlist.coverArt,
                 )
             )
         }
