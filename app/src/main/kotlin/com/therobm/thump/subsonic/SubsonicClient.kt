@@ -51,8 +51,13 @@ class SubsonicClient(
         endpointMethodName: String,
         buildResult: (SubsonicResponseEnvelope) -> T,
     ): SubsonicResult<T> {
-        val requestUrl: String = buildEndpointUrl(endpointMethodName)
-        val request: Request = Request.Builder().url(requestUrl).get().build()
+        val request: Request
+        try {
+            val requestUrl: String = buildEndpointUrl(endpointMethodName)
+            request = Request.Builder().url(requestUrl).get().build()
+        } catch (urlBuildFailure: Exception) {
+            return SubsonicResult.TransportError(urlBuildFailure)
+        }
 
         val responseBodyText: String = try {
             withContext(Dispatchers.IO) {
