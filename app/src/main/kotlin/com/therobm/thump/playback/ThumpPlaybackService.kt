@@ -157,9 +157,13 @@ class ThumpPlaybackService : MediaLibraryService() {
      * Ticker that runs while the service is alive. Persists the current player position and
      * checks the scrobble-submission threshold (50% of duration, or 4 minutes, whichever
      * first). Sleeps in 5s slices so the wakelock cost is negligible.
+     *
+     * Must run on the main thread because Player.isPlaying / currentPosition / etc. enforce
+     * the application looper. The actual scrobble HTTP fires from within
+     * fireScrobble* helpers which launch their own coroutines on the IO-default service scope.
      */
     private fun startPositionPersistenceLoop(player: Player) {
-        serviceCoroutineScope.launch {
+        serviceCoroutineScope.launch(Dispatchers.Main) {
             while (isActive) {
                 delay(POSITION_TICK_INTERVAL_MS)
                 if (!isActive) {
