@@ -90,7 +90,6 @@ fun HomeScreen(
         item {
             QuickPlaylistsGrid(
                 subsonicClient = subsonicClient,
-                isPulseServer = isPulseServer,
                 onPlaylistSelected = { playlistId: String, playlistName: String ->
                     onItemTapped(
                         HomeCarouselItem(

@@ -64,7 +64,6 @@ private const val GENRE_SAMPLE_FETCH_COUNT: Int = 8
 @Composable
 fun LibraryScreen(
     subsonicClient: SubsonicClient,
-    isPulseServer: Boolean,
     onArtistSelected: (String) -> Unit,
     onAlbumSelected: (String) -> Unit,
     onPlaylistSelected: (String) -> Unit,
@@ -180,7 +179,6 @@ fun LibraryScreen(
                 PlaylistsList(
                     state = playlistsState,
                     subsonicClient = subsonicClient,
-                    isPulseServer = isPulseServer,
                     onPlaylistSelected = onPlaylistSelected,
                 )
             }
@@ -296,7 +294,6 @@ private fun AlbumsList(
 private fun PlaylistsList(
     state: LibraryLoadState<List<StandardPlaylistSummary>>,
     subsonicClient: SubsonicClient,
-    isPulseServer: Boolean,
     onPlaylistSelected: (String) -> Unit,
 ) {
     when (state) {
@@ -316,7 +313,6 @@ private fun PlaylistsList(
                     LibraryPlaylistRow(
                         playlist = playlist,
                         subsonicClient = subsonicClient,
-                        isPulseServer = isPulseServer,
                         onTapped = { onPlaylistSelected(playlist.id) },
                     )
                 }
@@ -436,23 +432,21 @@ private fun LibraryAlbumRow(
 private fun LibraryPlaylistRow(
     playlist: StandardPlaylistSummary,
     subsonicClient: SubsonicClient,
-    isPulseServer: Boolean,
     onTapped: () -> Unit,
 ) {
-    // Same model as QuickPlaylistsGrid: on Pulse we feed the synthesized pl-<id> composite id
-    // straight in, no per-row getPlaylist needed. Non-Pulse paths still build the 2x2 from
-    // entry cover art.
-    var entryCoverArtIds: List<String> by remember(playlist.id, isPulseServer) {
+    // Prefer the playlist's own coverArt when the server supplies one; fall back to the on-
+    // device 2x2 stitch from entry covers when it's absent.
+    var entryCoverArtIds: List<String> by remember(playlist.id) {
         val initial: List<String>
-        if (isPulseServer) {
-            initial = listOf("pl-" + playlist.id)
+        if (playlist.coverArt != null) {
+            initial = listOf(playlist.coverArt)
         } else {
             initial = emptyList()
         }
         mutableStateOf(initial)
     }
-    LaunchedEffect(playlist.id, isPulseServer, subsonicClient) {
-        if (isPulseServer) {
+    LaunchedEffect(playlist.id, subsonicClient) {
+        if (playlist.coverArt != null) {
             return@LaunchedEffect
         }
         val result = subsonicClient.getPlaylist(playlist.id)

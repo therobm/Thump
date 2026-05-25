@@ -247,7 +247,6 @@ private fun ThumpApp() {
                     } else {
                         LibraryScreen(
                             subsonicClient = subsonicClient,
-                            isPulseServer = isPulseServer,
                             onArtistSelected = { artistId: String ->
                                 navController.navigate(buildArtistRoute(artistId))
                             },

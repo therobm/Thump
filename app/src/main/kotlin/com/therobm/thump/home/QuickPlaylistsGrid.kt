@@ -61,7 +61,6 @@ private const val QUEUE_ITEM_ART_REQUEST_SIZE_PX: Int = 200
 @Composable
 fun QuickPlaylistsGrid(
     subsonicClient: SubsonicClient,
-    isPulseServer: Boolean,
     onPlaylistSelected: (playlistId: String, playlistName: String) -> Unit,
     onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
@@ -113,7 +112,6 @@ fun QuickPlaylistsGrid(
                 QuickPlaylistTile(
                     playlist = playlists[leftPlaylistIndex],
                     subsonicClient = subsonicClient,
-                    isPulseServer = isPulseServer,
                     onTapped = {
                         val tappedPlaylist = playlists[leftPlaylistIndex]
                         onPlaylistSelected(tappedPlaylist.id, tappedPlaylist.name)
@@ -135,7 +133,6 @@ fun QuickPlaylistsGrid(
                     QuickPlaylistTile(
                         playlist = playlists[rightPlaylistIndex],
                         subsonicClient = subsonicClient,
-                        isPulseServer = isPulseServer,
                         onTapped = {
                             val tappedPlaylist = playlists[rightPlaylistIndex]
                             onPlaylistSelected(tappedPlaylist.id, tappedPlaylist.name)
@@ -167,26 +164,25 @@ fun QuickPlaylistsGrid(
 private fun QuickPlaylistTile(
     playlist: StandardPlaylistSummary,
     subsonicClient: SubsonicClient,
-    isPulseServer: Boolean,
     onTapped: () -> Unit,
     onQuickPlayClicked: () -> Unit,
     modifier: Modifier,
 ) {
-    // On Pulse the server generates a composite under id "pl-<playlistId>" (Pulse PR #34), so
-    // skip the per-tile getPlaylist round-trip and feed the single id straight into the tile.
-    // Non-Pulse paths fall back to the on-device 2x2 stitch by fetching playlist entries.
-    var entryCoverArtIds: List<String> by remember(playlist.id, isPulseServer) {
+    // Prefer the playlist's own coverArt when the server supplies one (Pulse's pl-<id>
+    // composite once Pulse exposes it on /rest/getPlaylists; any future server doing the same).
+    // Fall back to the on-device 2x2 stitch from entry covers when it's absent.
+    var entryCoverArtIds: List<String> by remember(playlist.id) {
         val initial: List<String>
-        if (isPulseServer) {
-            initial = listOf("pl-" + playlist.id)
+        if (playlist.coverArt != null) {
+            initial = listOf(playlist.coverArt)
         } else {
             initial = emptyList()
         }
         mutableStateOf(initial)
     }
 
-    LaunchedEffect(playlist.id, isPulseServer, subsonicClient) {
-        if (isPulseServer) {
+    LaunchedEffect(playlist.id, subsonicClient) {
+        if (playlist.coverArt != null) {
             return@LaunchedEffect
         }
         val result = subsonicClient.getPlaylist(playlist.id)
