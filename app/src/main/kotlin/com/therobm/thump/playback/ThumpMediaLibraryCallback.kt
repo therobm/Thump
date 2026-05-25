@@ -87,7 +87,17 @@ class ThumpMediaLibraryCallback(
             mediaId = MEDIA_ID_ROOT,
             title = "Thump",
         )
-        return Futures.immediateFuture(LibraryResult.ofItem(rootItem, params))
+        // Tell Auto explicitly that this root is neither a "recent" nor a "suggested" surface
+        // and isn't an offline view. That nudges Auto's launcher heuristic toward showing the
+        // browse tree on cold start when no media is loaded (when a blob is restored on
+        // service start, the session reports a current item and Auto still lands on Now
+        // Playing as expected).
+        val rootParams = LibraryParams.Builder()
+            .setRecent(false)
+            .setSuggested(false)
+            .setOffline(false)
+            .build()
+        return Futures.immediateFuture(LibraryResult.ofItem(rootItem, rootParams))
     }
 
     override fun onGetItem(
