@@ -18,15 +18,12 @@ import com.therobm.thump.subsonic.StandardPlaylistSummary
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.guava.future
 
 private const val MEDIA_ID_ROOT: String = "thump-root"
 private const val MEDIA_ID_HOME: String = "thump-root/home"
-private const val MEDIA_ID_HOME_RECENTLY: String = "thump-root/home/recently"
-private const val MEDIA_ID_HOME_PLAYLISTS_SHELF: String = "thump-root/home/playlists"
-private const val MEDIA_ID_HOME_POPULAR_OR_FREQUENT: String = "thump-root/home/popular-or-frequent"
-private const val MEDIA_ID_HOME_RECENTLY_ADDED: String = "thump-root/home/recently-added"
-private const val MEDIA_ID_HOME_FAVORITES: String = "thump-root/home/favorites"
 private const val MEDIA_ID_RECENTS: String = "thump-root/recents"
 private const val MEDIA_ID_PLAYLISTS: String = "thump-root/playlists"
 private const val MEDIA_ID_ARTISTS: String = "thump-root/artists"
@@ -51,6 +48,10 @@ private const val CONTENT_STYLE_BROWSABLE_HINT_KEY: String = "android.media.brow
 private const val CONTENT_STYLE_PLAYABLE_HINT_KEY: String = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT"
 private const val CONTENT_STYLE_LIST_ITEM: Int = 1
 private const val CONTENT_STYLE_GRID_ITEM: Int = 2
+// When set on a child, Auto renders a section header with this title above that child (and
+// groups consecutive children sharing the title under one header). This is how the Home folder
+// shows its five sections inline instead of forcing the user to drill into sub-folders.
+private const val CONTENT_STYLE_GROUP_TITLE_HINT_KEY: String = "android.media.browse.CONTENT_STYLE_GROUP_TITLE_HINT"
 
 /**
  * Browse-tree callback for the MediaLibrarySession used by Android Auto and any other
@@ -105,22 +106,7 @@ class ThumpMediaLibraryCallback(
                 return@future LibraryResult.ofItemList(buildRootChildren(), params)
             }
             if (parentId == MEDIA_ID_HOME) {
-                return@future buildHomeChildren(params)
-            }
-            if (parentId == MEDIA_ID_HOME_RECENTLY) {
-                return@future buildHomeRecentlyPlayed(subsonicClient, params)
-            }
-            if (parentId == MEDIA_ID_HOME_PLAYLISTS_SHELF) {
-                return@future buildHomePlaylistsShelf(subsonicClient, params)
-            }
-            if (parentId == MEDIA_ID_HOME_POPULAR_OR_FREQUENT) {
-                return@future buildHomePopularOrFrequent(subsonicClient, params)
-            }
-            if (parentId == MEDIA_ID_HOME_RECENTLY_ADDED) {
-                return@future buildHomeRecentlyAdded(subsonicClient, params)
-            }
-            if (parentId == MEDIA_ID_HOME_FAVORITES) {
-                return@future buildHomeFavorites(subsonicClient, params)
+                return@future buildHomeChildren(subsonicClient, params)
             }
             if (parentId == MEDIA_ID_RECENTS) {
                 return@future buildRecentsChildren(subsonicClient, params)
@@ -187,39 +173,73 @@ class ThumpMediaLibraryCallback(
     }
 
     /**
-     * Home: mirrors the phone Home tab's five sections, one Auto sub-folder per section. The
-     * Pulse-vs-standard branch decides which titles to use (e.g. "Most Played" vs "Popular
-     * Artists") and which endpoint each shelf calls. Section contents are fetched lazily when
-     * the user opens that shelf, so opening Home itself is a single getPlaylists-free call.
+     * Home: a flat folder whose children carry the section's name in their group-title extra,
+     * so Auto renders "Recently Played" / "Your Playlists" / etc. as inline section headers
+     * inside the Home tab (the way Spotify and YouTube Music do) instead of forcing the user
+     * to drill into sub-folders.
+     *
+     * All five sections are fetched in parallel and concatenated in display order.
      */
-    private fun buildHomeChildren(params: LibraryParams?): LibraryResult<ImmutableList<MediaItem>> {
-        val isPulse = credentialsLoader.loadIsPulseDetected()
-        val out = ImmutableList.builder<MediaItem>()
-        out.add(buildBrowseableItem(MEDIA_ID_HOME_RECENTLY, "Recently Played"))
-        if (isPulse) {
-            out.add(buildBrowseableItem(MEDIA_ID_HOME_PLAYLISTS_SHELF, "Your Playlists"))
-            out.add(buildBrowseableItem(MEDIA_ID_HOME_POPULAR_OR_FREQUENT, "Popular Artists"))
-        } else {
-            out.add(buildBrowseableItem(MEDIA_ID_HOME_PLAYLISTS_SHELF, "Playlists"))
-            out.add(buildBrowseableItem(MEDIA_ID_HOME_POPULAR_OR_FREQUENT, "Most Played"))
-        }
-        out.add(buildBrowseableItem(MEDIA_ID_HOME_RECENTLY_ADDED, "Recently Added"))
-        out.add(buildBrowseableItem(MEDIA_ID_HOME_FAVORITES, "Favorites"))
-        return LibraryResult.ofItemList(out.build(), params)
-    }
-
-    private suspend fun buildHomeRecentlyPlayed(
+    private suspend fun buildHomeChildren(
         subsonicClient: SubsonicClient,
         params: LibraryParams?,
     ): LibraryResult<ImmutableList<MediaItem>> {
         val isPulse = credentialsLoader.loadIsPulseDetected()
+        val playlistsTitle: String
+        val popularOrFrequentTitle: String
+        if (isPulse) {
+            playlistsTitle = "Your Playlists"
+            popularOrFrequentTitle = "Popular Artists"
+        } else {
+            playlistsTitle = "Playlists"
+            popularOrFrequentTitle = "Most Played"
+        }
+
+        val sections: List<List<MediaItem>> = coroutineScope {
+            val recentlyPlayedDeferred = async {
+                fetchRecentlyPlayedSection(subsonicClient, isPulse, "Recently Played")
+            }
+            val playlistsDeferred = async {
+                fetchPlaylistsSection(subsonicClient, isPulse, playlistsTitle)
+            }
+            val popularOrFrequentDeferred = async {
+                fetchPopularOrFrequentSection(subsonicClient, isPulse, popularOrFrequentTitle)
+            }
+            val recentlyAddedDeferred = async {
+                fetchRecentlyAddedSection(subsonicClient, "Recently Added")
+            }
+            val favoritesDeferred = async {
+                fetchFavoritesSection(subsonicClient, "Favorites")
+            }
+            listOf(
+                recentlyPlayedDeferred.await(),
+                playlistsDeferred.await(),
+                popularOrFrequentDeferred.await(),
+                recentlyAddedDeferred.await(),
+                favoritesDeferred.await(),
+            )
+        }
+
+        val combined = ImmutableList.builder<MediaItem>()
+        val sectionCount = sections.size
+        for (sectionIndex in 0 until sectionCount) {
+            combined.addAll(sections[sectionIndex])
+        }
+        return LibraryResult.ofItemList(combined.build(), params)
+    }
+
+    private suspend fun fetchRecentlyPlayedSection(
+        subsonicClient: SubsonicClient,
+        isPulse: Boolean,
+        sectionTitle: String,
+    ): List<MediaItem> {
         if (isPulse) {
             val pulseResult = subsonicClient.getPulseRecentlyPlayed(HOME_SECTION_ITEM_LIMIT)
             if (pulseResult !is SubsonicResult.Ok) {
-                return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+                return emptyList()
             }
             val tracks = pulseResult.value
-            val out = ImmutableList.builder<MediaItem>()
+            val out = ArrayList<MediaItem>(tracks.size)
             val trackCount = tracks.size
             for (index in 0 until trackCount) {
                 val track = tracks[index]
@@ -229,37 +249,37 @@ class ThumpMediaLibraryCallback(
                 } else {
                     artistText = track.artist
                 }
-                out.add(
-                    buildPlayableStub(
-                        trackId = track.id,
-                        title = track.title,
-                        artist = artistText,
-                        album = track.album,
-                        coverArtId = track.coverArt,
-                        subsonicClient = subsonicClient,
-                    )
+                val tile = buildPlayableStub(
+                    trackId = track.id,
+                    title = track.title,
+                    artist = artistText,
+                    album = track.album,
+                    coverArtId = track.coverArt,
+                    subsonicClient = subsonicClient,
                 )
+                out.add(withGroupTitle(tile, sectionTitle))
             }
-            return LibraryResult.ofItemList(out.build(), params)
+            return out
         }
         val albumResult = subsonicClient.getAlbumList2("recent", HOME_SECTION_ITEM_LIMIT)
         if (albumResult !is SubsonicResult.Ok) {
-            return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+            return emptyList()
         }
-        return LibraryResult.ofItemList(albumsToBrowseable(albumResult.value, subsonicClient), params)
+        return tagWithGroupTitle(albumsToBrowseable(albumResult.value, subsonicClient), sectionTitle)
     }
 
-    private suspend fun buildHomePlaylistsShelf(
+    private suspend fun fetchPlaylistsSection(
         subsonicClient: SubsonicClient,
-        params: LibraryParams?,
-    ): LibraryResult<ImmutableList<MediaItem>> {
-        val isPulse = credentialsLoader.loadIsPulseDetected()
+        isPulse: Boolean,
+        sectionTitle: String,
+    ): List<MediaItem> {
         // On Pulse "Your Playlists" follows the score-ranked order from pulse/topPlaylists,
-        // matching the phone Home carousel. Standard servers fall back to getPlaylists order.
+        // matching the phone Home carousel. Standard servers use getPlaylists order.
+        val summariesInDisplayOrder = ArrayList<StandardPlaylistSummary>()
         if (isPulse) {
             val topResult = subsonicClient.getPulseTopPlaylists(HOME_SECTION_ITEM_LIMIT)
             if (topResult !is SubsonicResult.Ok) {
-                return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+                return emptyList()
             }
             val allPlaylistsResult = subsonicClient.getPlaylists()
             val playlistsById = HashMap<String, StandardPlaylistSummary>()
@@ -270,103 +290,99 @@ class ThumpMediaLibraryCallback(
                     playlistsById[all[index].id] = all[index]
                 }
             }
-            val out = ImmutableList.builder<MediaItem>()
             val ranked = topResult.value
             val rankedCount = ranked.size
             for (index in 0 until rankedCount) {
                 val rankedPlaylist = ranked[index]
                 val matched = playlistsById[rankedPlaylist.id]
-                val summary: StandardPlaylistSummary
                 if (matched != null) {
-                    summary = matched
+                    summariesInDisplayOrder.add(matched)
                 } else {
-                    summary = StandardPlaylistSummary(
-                        id = rankedPlaylist.id,
-                        name = rankedPlaylist.name,
-                        songCount = rankedPlaylist.songCount,
-                        duration = rankedPlaylist.duration,
+                    summariesInDisplayOrder.add(
+                        StandardPlaylistSummary(
+                            id = rankedPlaylist.id,
+                            name = rankedPlaylist.name,
+                            songCount = rankedPlaylist.songCount,
+                            duration = rankedPlaylist.duration,
+                        )
                     )
                 }
-                out.add(playlistToBrowseableWithFallbackArt(summary, subsonicClient))
             }
-            return LibraryResult.ofItemList(out.build(), params)
-        }
-        val result = subsonicClient.getPlaylists()
-        if (result !is SubsonicResult.Ok) {
-            return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
-        }
-        val takeCount: Int
-        if (result.value.size < HOME_SECTION_ITEM_LIMIT) {
-            takeCount = result.value.size
         } else {
-            takeCount = HOME_SECTION_ITEM_LIMIT
+            val result = subsonicClient.getPlaylists()
+            if (result !is SubsonicResult.Ok) {
+                return emptyList()
+            }
+            val takeCount: Int
+            if (result.value.size < HOME_SECTION_ITEM_LIMIT) {
+                takeCount = result.value.size
+            } else {
+                takeCount = HOME_SECTION_ITEM_LIMIT
+            }
+            for (index in 0 until takeCount) {
+                summariesInDisplayOrder.add(result.value[index])
+            }
         }
-        val out = ImmutableList.builder<MediaItem>()
-        for (index in 0 until takeCount) {
-            out.add(playlistToBrowseableWithFallbackArt(result.value[index], subsonicClient))
-        }
-        return LibraryResult.ofItemList(out.build(), params)
+        val tiles = resolvePlaylistTilesInParallel(summariesInDisplayOrder, subsonicClient)
+        return tagWithGroupTitle(tiles, sectionTitle)
     }
 
-    private suspend fun buildHomePopularOrFrequent(
+    private suspend fun fetchPopularOrFrequentSection(
         subsonicClient: SubsonicClient,
-        params: LibraryParams?,
-    ): LibraryResult<ImmutableList<MediaItem>> {
-        val isPulse = credentialsLoader.loadIsPulseDetected()
+        isPulse: Boolean,
+        sectionTitle: String,
+    ): List<MediaItem> {
         if (isPulse) {
             val pulseResult = subsonicClient.getPulsePopularArtists(HOME_SECTION_ITEM_LIMIT)
             if (pulseResult !is SubsonicResult.Ok) {
-                return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+                return emptyList()
             }
-            val out = ImmutableList.builder<MediaItem>()
             val artists = pulseResult.value
+            val out = ArrayList<MediaItem>(artists.size)
             val artistCount = artists.size
             for (index in 0 until artistCount) {
                 val popularArtist = artists[index]
-                out.add(
-                    artistToBrowseable(
-                        StandardLibraryArtist(
-                            id = popularArtist.id,
-                            name = popularArtist.name,
-                            albumCount = popularArtist.albumCount,
-                            coverArt = popularArtist.coverArt,
-                        ),
-                        subsonicClient,
-                    )
+                val tile = artistToBrowseable(
+                    StandardLibraryArtist(
+                        id = popularArtist.id,
+                        name = popularArtist.name,
+                        albumCount = popularArtist.albumCount,
+                        coverArt = popularArtist.coverArt,
+                    ),
+                    subsonicClient,
                 )
+                out.add(withGroupTitle(tile, sectionTitle))
             }
-            return LibraryResult.ofItemList(out.build(), params)
+            return out
         }
         val albumResult = subsonicClient.getAlbumList2("frequent", HOME_SECTION_ITEM_LIMIT)
         if (albumResult !is SubsonicResult.Ok) {
-            return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+            return emptyList()
         }
-        return LibraryResult.ofItemList(albumsToBrowseable(albumResult.value, subsonicClient), params)
+        return tagWithGroupTitle(albumsToBrowseable(albumResult.value, subsonicClient), sectionTitle)
     }
 
-    private suspend fun buildHomeRecentlyAdded(
+    private suspend fun fetchRecentlyAddedSection(
         subsonicClient: SubsonicClient,
-        params: LibraryParams?,
-    ): LibraryResult<ImmutableList<MediaItem>> {
+        sectionTitle: String,
+    ): List<MediaItem> {
         val albumResult = subsonicClient.getAlbumList2("newest", HOME_SECTION_ITEM_LIMIT)
         if (albumResult !is SubsonicResult.Ok) {
-            return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+            return emptyList()
         }
-        return LibraryResult.ofItemList(albumsToBrowseable(albumResult.value, subsonicClient), params)
+        return tagWithGroupTitle(albumsToBrowseable(albumResult.value, subsonicClient), sectionTitle)
     }
 
-    private suspend fun buildHomeFavorites(
+    private suspend fun fetchFavoritesSection(
         subsonicClient: SubsonicClient,
-        params: LibraryParams?,
-    ): LibraryResult<ImmutableList<MediaItem>> {
+        sectionTitle: String,
+    ): List<MediaItem> {
         val starredResult = subsonicClient.getStarred2()
         if (starredResult !is SubsonicResult.Ok) {
-            return LibraryResult.ofItemList(ImmutableList.of<MediaItem>(), params)
+            return emptyList()
         }
         val starred = starredResult.value
-        val out = ImmutableList.builder<MediaItem>()
-        // Albums first (most browseable), then artists, then songs — mirrors the phone Home
-        // Favorites carousel order.
+        val out = ArrayList<MediaItem>()
         val albumCount = starred.album.size
         for (index in 0 until albumCount) {
             val album = starred.album[index]
@@ -377,29 +393,27 @@ class ThumpMediaLibraryCallback(
             } else {
                 coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, COVER_ART_REQUEST_SIZE_PX)
             }
-            out.add(
-                buildBrowseableItem(
-                    mediaId = MEDIA_ID_PREFIX_ALBUM + album.id,
-                    title = album.name,
-                    subtitle = album.artist,
-                    artUri = coverArtUrl,
-                )
+            val tile = buildBrowseableItem(
+                mediaId = MEDIA_ID_PREFIX_ALBUM + album.id,
+                title = album.name,
+                subtitle = album.artist,
+                artUri = coverArtUrl,
             )
+            out.add(withGroupTitle(tile, sectionTitle))
         }
         val starredArtistCount = starred.artist.size
         for (index in 0 until starredArtistCount) {
             val artist = starred.artist[index]
-            out.add(
-                artistToBrowseable(
-                    StandardLibraryArtist(
-                        id = artist.id,
-                        name = artist.name,
-                        albumCount = artist.albumCount,
-                        coverArt = artist.coverArt,
-                    ),
-                    subsonicClient,
-                )
+            val tile = artistToBrowseable(
+                StandardLibraryArtist(
+                    id = artist.id,
+                    name = artist.name,
+                    albumCount = artist.albumCount,
+                    coverArt = artist.coverArt,
+                ),
+                subsonicClient,
             )
+            out.add(withGroupTitle(tile, sectionTitle))
         }
         val starredSongCount = starred.song.size
         for (index in 0 until starredSongCount) {
@@ -410,18 +424,48 @@ class ThumpMediaLibraryCallback(
             } else {
                 artistText = song.artist
             }
-            out.add(
-                buildPlayableStub(
-                    trackId = song.id,
-                    title = song.title,
-                    artist = artistText,
-                    album = song.album,
-                    coverArtId = song.coverArt,
-                    subsonicClient = subsonicClient,
-                )
+            val tile = buildPlayableStub(
+                trackId = song.id,
+                title = song.title,
+                artist = artistText,
+                album = song.album,
+                coverArtId = song.coverArt,
+                subsonicClient = subsonicClient,
             )
+            out.add(withGroupTitle(tile, sectionTitle))
         }
-        return LibraryResult.ofItemList(out.build(), params)
+        return out
+    }
+
+    /**
+     * Build the playlist tile list with first-track-art fallback for each tile, running the per-
+     * playlist getPlaylist calls in parallel. Used by both the Home Playlists shelf and the full
+     * alphabetical Playlists tab so they all show some image instead of a blank tile until the
+     * server-side composite from Pulse #143 lands.
+     */
+    private suspend fun resolvePlaylistTilesInParallel(
+        playlists: List<StandardPlaylistSummary>,
+        subsonicClient: SubsonicClient,
+    ): List<MediaItem> {
+        if (playlists.isEmpty()) {
+            return emptyList()
+        }
+        return coroutineScope {
+            val deferreds = ArrayList<kotlinx.coroutines.Deferred<MediaItem>>(playlists.size)
+            val count = playlists.size
+            for (index in 0 until count) {
+                val playlistAtIndex = playlists[index]
+                deferreds.add(async {
+                    playlistToBrowseableWithFallbackArt(playlistAtIndex, subsonicClient)
+                })
+            }
+            val tiles = ArrayList<MediaItem>(playlists.size)
+            val deferredCount = deferreds.size
+            for (deferredIndex in 0 until deferredCount) {
+                tiles.add(deferreds[deferredIndex].await())
+            }
+            tiles
+        }
     }
 
     /**
@@ -565,12 +609,12 @@ class ThumpMediaLibraryCallback(
         playlists.sortWith(Comparator { left: StandardPlaylistSummary, right: StandardPlaylistSummary ->
             left.name.compareTo(right.name, ignoreCase = true)
         })
-        val out = ImmutableList.builder<MediaItem>()
-        val playlistCount = playlists.size
-        for (index in 0 until playlistCount) {
-            out.add(playlistToBrowseable(playlists[index], subsonicClient))
-        }
-        return LibraryResult.ofItemList(out.build(), params)
+        // Per-tile fallback art (first track's coverArt) so the Playlists tab in Auto isn't a
+        // wall of blank tiles. Fired in parallel — N getPlaylist calls fan out and the whole
+        // batch resolves before we hand the list back to Auto. Caller-imposed cap of
+        // PLAYLISTS_FETCH_LIMIT bounds the fan-out.
+        val tiles = resolvePlaylistTilesInParallel(playlists, subsonicClient)
+        return LibraryResult.ofItemList(ImmutableList.copyOf(tiles), params)
     }
 
     private suspend fun buildArtistsChildren(
@@ -903,6 +947,31 @@ class ThumpMediaLibraryCallback(
             return mediaId.removePrefix(MEDIA_ID_PREFIX_TRACK)
         }
         return null
+    }
+
+    /**
+     * Returns a new MediaItem identical to [item] except the section's group title is merged
+     * into its MediaMetadata extras. Auto reads this and renders a section header above the
+     * first item that carries it.
+     */
+    private fun withGroupTitle(item: MediaItem, sectionTitle: String): MediaItem {
+        val newExtras = android.os.Bundle()
+        val existingExtras = item.mediaMetadata.extras
+        if (existingExtras != null) {
+            newExtras.putAll(existingExtras)
+        }
+        newExtras.putString(CONTENT_STYLE_GROUP_TITLE_HINT_KEY, sectionTitle)
+        val newMetadata = item.mediaMetadata.buildUpon().setExtras(newExtras).build()
+        return item.buildUpon().setMediaMetadata(newMetadata).build()
+    }
+
+    private fun tagWithGroupTitle(items: List<MediaItem>, sectionTitle: String): List<MediaItem> {
+        val out = ArrayList<MediaItem>(items.size)
+        val itemCount = items.size
+        for (index in 0 until itemCount) {
+            out.add(withGroupTitle(items[index], sectionTitle))
+        }
+        return out
     }
 
     /**
