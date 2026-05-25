@@ -1,53 +1,88 @@
 package com.therobm.thump.playback
 
+import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Owns the single ExoPlayer instance and exposes a small surface for the UI.
+ * Owns the app-side MediaController that drives the playback service.
  *
- * Holds a single queue at a time. Calling playQueue replaces whatever was loaded and starts
- * playback at the given index; ExoPlayer auto-advances through the rest. The nowPlaying flow
- * tracks the currently-loaded item and whether it's playing or paused, updated both by direct
- * calls and by the player's own transition events (so auto-advance keeps the mini player in
- * sync).
- *
- * Construct one per app session, hold it across recompositions, and call release() exactly
- * once when the host activity is destroyed.
+ * Compose holds one instance per session, calls `connect()` once it is composed, and `release()`
+ * on dispose. Until the controller resolves, playback calls are no-ops — the UI only triggers
+ * them in response to user input that happens after the activity is alive, by which point the
+ * async connect has almost always completed.
  */
 class PlaybackController(applicationContext: Context) {
 
-    private val exoPlayer: ExoPlayer = ExoPlayer.Builder(applicationContext).build()
+    private val resolvedApplicationContext: Context = applicationContext.applicationContext
 
     private val nowPlayingFlow: MutableStateFlow<NowPlaying?> = MutableStateFlow(null)
     val nowPlaying: StateFlow<NowPlaying?> = nowPlayingFlow
 
+    private var mediaController: MediaController? = null
+    private var pendingControllerFuture: ListenableFuture<MediaController>? = null
+
     private var currentQueueMetadata: List<PlaybackQueueItem> = emptyList()
     private var currentQueueSource: PlaybackSource? = null
 
-    init {
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                updateIsPlayingFlag(isPlaying)
-            }
+    private val playerListener: Player.Listener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updateIsPlayingFlag(isPlaying)
+        }
 
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                refreshNowPlayingFromCurrentIndex()
-            }
-        })
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            refreshNowPlayingFromCurrentIndex()
+        }
     }
 
     /**
-     * Replace the current queue with the given items and start playback at startIndex.
-     *
-     * Items at indexes after startIndex are queued behind it; ExoPlayer auto-advances through
-     * the queue when each track finishes.
+     * Start the async connection to ThumpPlaybackService. Safe to call repeatedly; subsequent
+     * calls while a connect is in flight or a controller is already bound are no-ops.
+     */
+    fun connect() {
+        if (mediaController != null) {
+            return
+        }
+        if (pendingControllerFuture != null) {
+            return
+        }
+        val sessionToken = SessionToken(
+            resolvedApplicationContext,
+            ComponentName(resolvedApplicationContext, ThumpPlaybackService::class.java),
+        )
+        val future = MediaController.Builder(resolvedApplicationContext, sessionToken).buildAsync()
+        pendingControllerFuture = future
+        future.addListener(
+            {
+                try {
+                    val controller = future.get()
+                    controller.addListener(playerListener)
+                    mediaController = controller
+                } catch (controllerBuildFailure: Exception) {
+                    // No usable controller — keep mediaController null so UI calls become no-ops.
+                }
+                pendingControllerFuture = null
+            },
+            MoreExecutors.directExecutor(),
+        )
+    }
+
+    /**
+     * Replace the current queue with the given items and start playback at startIndex. No-op if
+     * the controller has not connected yet.
      */
     fun playQueue(items: List<PlaybackQueueItem>, startIndex: Int, source: PlaybackSource?) {
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
         if (items.isEmpty()) {
             return
         }
@@ -69,56 +104,65 @@ class PlaybackController(applicationContext: Context) {
             mediaItems.add(MediaItem.fromUri(items[itemIndex].streamUrl))
         }
 
-        exoPlayer.setMediaItems(mediaItems, safeStartIndex, 0L)
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
+        controller.setMediaItems(mediaItems, safeStartIndex, 0L)
+        controller.prepare()
+        controller.playWhenReady = true
 
         publishNowPlayingFor(safeStartIndex, isPlayingHint = true)
     }
 
     fun pause() {
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
+        if (controller.isPlaying) {
+            controller.pause()
         }
     }
 
     fun resume() {
-        if (!exoPlayer.isPlaying) {
-            exoPlayer.play()
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
+        if (!controller.isPlaying) {
+            controller.play()
         }
     }
 
-    /**
-     * Move to the next item in the queue. No-op if there is no next item.
-     */
     fun skipToNext() {
-        if (exoPlayer.hasNextMediaItem()) {
-            exoPlayer.seekToNext()
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
+        if (controller.hasNextMediaItem()) {
+            controller.seekToNext()
         }
     }
 
-    /**
-     * Move to the previous item in the queue. Convention follows most media apps: if the user
-     * is more than a few seconds into the current track, the press restarts the current track
-     * instead of going back.
-     */
     fun skipToPrevious() {
-        if (exoPlayer.currentPosition > PREVIOUS_RESTART_THRESHOLD_MS) {
-            exoPlayer.seekTo(0L)
+        val controller = mediaController
+        if (controller == null) {
             return
         }
-        if (exoPlayer.hasPreviousMediaItem()) {
-            exoPlayer.seekToPrevious()
+        if (controller.currentPosition > PREVIOUS_RESTART_THRESHOLD_MS) {
+            controller.seekTo(0L)
             return
         }
-        exoPlayer.seekTo(0L)
+        if (controller.hasPreviousMediaItem()) {
+            controller.seekToPrevious()
+            return
+        }
+        controller.seekTo(0L)
     }
 
-    /**
-     * Seek to an absolute position inside the current track. Clamps to [0, duration].
-     */
     fun seekTo(positionMs: Long) {
-        val duration = exoPlayer.duration
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
+        val duration = controller.duration
         val clamped: Long
         if (positionMs < 0L) {
             clamped = 0L
@@ -127,23 +171,23 @@ class PlaybackController(applicationContext: Context) {
         } else {
             clamped = positionMs
         }
-        exoPlayer.seekTo(clamped)
+        controller.seekTo(clamped)
     }
 
-    /**
-     * Current playback position inside the active track, in milliseconds. Polled from the UI
-     * for the seek bar — ExoPlayer does not expose a flow for this.
-     */
     fun currentPositionMs(): Long {
-        return exoPlayer.currentPosition
+        val controller = mediaController
+        if (controller == null) {
+            return 0L
+        }
+        return controller.currentPosition
     }
 
-    /**
-     * Total duration of the active track, in milliseconds. Returns 0 when unknown (e.g. before
-     * the player has loaded the track).
-     */
     fun durationMs(): Long {
-        val duration = exoPlayer.duration
+        val controller = mediaController
+        if (controller == null) {
+            return 0L
+        }
+        val duration = controller.duration
         if (duration <= 0L) {
             return 0L
         }
@@ -151,15 +195,33 @@ class PlaybackController(applicationContext: Context) {
     }
 
     fun hasNext(): Boolean {
-        return exoPlayer.hasNextMediaItem()
+        val controller = mediaController
+        if (controller == null) {
+            return false
+        }
+        return controller.hasNextMediaItem()
     }
 
     fun hasPrevious(): Boolean {
-        return exoPlayer.hasPreviousMediaItem()
+        val controller = mediaController
+        if (controller == null) {
+            return false
+        }
+        return controller.hasPreviousMediaItem()
     }
 
     fun release() {
-        exoPlayer.release()
+        val controller = mediaController
+        if (controller != null) {
+            controller.removeListener(playerListener)
+            controller.release()
+            mediaController = null
+        }
+        val pending = pendingControllerFuture
+        if (pending != null) {
+            pending.cancel(false)
+            pendingControllerFuture = null
+        }
     }
 
     private fun updateIsPlayingFlag(isPlaying: Boolean) {
@@ -174,8 +236,12 @@ class PlaybackController(applicationContext: Context) {
     }
 
     private fun refreshNowPlayingFromCurrentIndex() {
-        val newIndex = exoPlayer.currentMediaItemIndex
-        publishNowPlayingFor(newIndex, isPlayingHint = exoPlayer.isPlaying)
+        val controller = mediaController
+        if (controller == null) {
+            return
+        }
+        val newIndex = controller.currentMediaItemIndex
+        publishNowPlayingFor(newIndex, isPlayingHint = controller.isPlaying)
     }
 
     private fun publishNowPlayingFor(index: Int, isPlayingHint: Boolean) {
