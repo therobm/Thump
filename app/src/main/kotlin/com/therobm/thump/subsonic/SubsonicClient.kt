@@ -139,6 +139,57 @@ class SubsonicClient(
     }
 
     /**
+     * Calls /rest/getAlbum and returns the album with its tracks.
+     */
+    suspend fun getAlbum(albumId: String): SubsonicResult<StandardAlbumDetailPayload> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getAlbum",
+            extraQueryParameters = mapOf("id" to albumId),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.album
+            if (payload == null) {
+                StandardAlbumDetailPayload(id = albumId, name = "")
+            } else {
+                payload
+            }
+        }
+    }
+
+    /**
+     * Calls /rest/getPlaylist and returns the playlist with its entries.
+     */
+    suspend fun getPlaylist(playlistId: String): SubsonicResult<StandardPlaylistDetailPayload> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getPlaylist",
+            extraQueryParameters = mapOf("id" to playlistId),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.playlist
+            if (payload == null) {
+                StandardPlaylistDetailPayload(id = playlistId, name = "")
+            } else {
+                payload
+            }
+        }
+    }
+
+    /**
+     * Calls /rest/getArtist and returns the artist with their albums.
+     */
+    suspend fun getArtist(artistId: String): SubsonicResult<StandardArtistDetailPayload> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getArtist",
+            extraQueryParameters = mapOf("id" to artistId),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.artist
+            if (payload == null) {
+                StandardArtistDetailPayload(id = artistId, name = "")
+            } else {
+                payload
+            }
+        }
+    }
+
+    /**
      * Calls the optional Pulse pulse/recentlyPlayed endpoint. Only valid when the server has
      * already been detected as a Pulse server via probePulseExtensions().
      */
