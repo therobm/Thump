@@ -36,10 +36,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.therobm.thump.detail.AlbumDetailScreen
+import com.therobm.thump.detail.ArtistDetailScreen
+import com.therobm.thump.detail.PlaylistDetailScreen
 import com.therobm.thump.home.HomeCarouselItem
 import com.therobm.thump.home.HomeItemKind
 import com.therobm.thump.home.HomeScreen
@@ -47,6 +52,7 @@ import com.therobm.thump.library.LibraryScreen
 import com.therobm.thump.playback.MiniPlayer
 import com.therobm.thump.playback.NowPlaying
 import com.therobm.thump.playback.PlaybackController
+import com.therobm.thump.playback.PlaybackQueueItem
 import com.therobm.thump.search.SearchScreen
 import com.therobm.thump.settings.SettingsScreen
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -81,7 +87,26 @@ private const val ROUTE_LIBRARY = "library"
 private const val ROUTE_SEARCH = "search"
 private const val ROUTE_SETTINGS = "settings"
 
+private const val NAV_ARG_ALBUM_ID = "albumId"
+private const val NAV_ARG_PLAYLIST_ID = "playlistId"
+private const val NAV_ARG_ARTIST_ID = "artistId"
+private const val ROUTE_ALBUM_PATTERN = "album/{$NAV_ARG_ALBUM_ID}"
+private const val ROUTE_PLAYLIST_PATTERN = "playlist/{$NAV_ARG_PLAYLIST_ID}"
+private const val ROUTE_ARTIST_PATTERN = "artist/{$NAV_ARG_ARTIST_ID}"
+
 private const val MINI_PLAYER_ART_REQUEST_SIZE: Int = 150
+
+private fun buildAlbumRoute(albumId: String): String {
+    return "album/" + albumId
+}
+
+private fun buildPlaylistRoute(playlistId: String): String {
+    return "playlist/" + playlistId
+}
+
+private fun buildArtistRoute(artistId: String): String {
+    return "artist/" + artistId
+}
 
 @Composable
 private fun ThumpApp() {
@@ -119,26 +144,45 @@ private fun ThumpApp() {
         }
         val nowPlaying: NowPlaying? by playbackController.nowPlaying.collectAsState()
 
+        val navController = rememberNavController()
+
+        val onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit = { items: List<PlaybackQueueItem>, startIndex: Int ->
+            playbackController.playQueue(items, startIndex)
+        }
+
         val onHomeItemTapped: (HomeCarouselItem) -> Unit = { tappedItem: HomeCarouselItem ->
-            if (subsonicClient != null && tappedItem.kind == HomeItemKind.Track) {
-                val tappedCoverArtUrl: String?
-                val tappedCoverArtId = tappedItem.coverArtId
-                if (tappedCoverArtId == null) {
-                    tappedCoverArtUrl = null
-                } else {
-                    tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
+            if (subsonicClient != null) {
+                when (tappedItem.kind) {
+                    HomeItemKind.Track -> {
+                        val tappedCoverArtUrl: String?
+                        val tappedCoverArtId = tappedItem.coverArtId
+                        if (tappedCoverArtId == null) {
+                            tappedCoverArtUrl = null
+                        } else {
+                            tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
+                        }
+                        val singleItem = PlaybackQueueItem(
+                            trackId = tappedItem.id,
+                            streamUrl = subsonicClient.buildStreamUrl(tappedItem.id),
+                            title = tappedItem.title,
+                            artist = tappedItem.subtitle,
+                            coverArtUrl = tappedCoverArtUrl,
+                        )
+                        playbackController.playQueue(listOf(singleItem), 0)
+                    }
+                    HomeItemKind.Album -> {
+                        navController.navigate(buildAlbumRoute(tappedItem.id))
+                    }
+                    HomeItemKind.Playlist -> {
+                        navController.navigate(buildPlaylistRoute(tappedItem.id))
+                    }
+                    HomeItemKind.Artist -> {
+                        navController.navigate(buildArtistRoute(tappedItem.id))
+                    }
                 }
-                playbackController.play(
-                    trackId = tappedItem.id,
-                    streamUrl = subsonicClient.buildStreamUrl(tappedItem.id),
-                    title = tappedItem.title,
-                    artist = tappedItem.subtitle,
-                    coverArtUrl = tappedCoverArtUrl,
-                )
             }
         }
 
-        val navController = rememberNavController()
         val currentBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute: String?
         val backStackSnapshot = currentBackStackEntry
@@ -170,12 +214,19 @@ private fun ThumpApp() {
                     ThumpBottomBar(
                         currentRoute = currentRoute,
                         onTabSelected = { destinationRoute: String ->
-                            navController.navigate(destinationRoute) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            // If the destination's already in the back stack (typical when the
+                            // user has drilled into a detail screen from that tab), pop back to
+                            // it rather than pushing a duplicate. Only navigate fresh when the
+                            // destination has not been visited yet on this session.
+                            val poppedExisting = navController.popBackStack(destinationRoute, inclusive = false)
+                            if (!poppedExisting) {
+                                navController.navigate(destinationRoute) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                     )
@@ -206,6 +257,74 @@ private fun ThumpApp() {
                 }
                 composable(ROUTE_SEARCH) {
                     SearchScreen(contentPadding = innerPadding, modifier = Modifier)
+                }
+                composable(
+                    route = ROUTE_ALBUM_PATTERN,
+                    arguments = listOf(navArgument(NAV_ARG_ALBUM_ID) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val argumentBundle = backStackEntry.arguments
+                    val albumIdArgument: String?
+                    if (argumentBundle == null) {
+                        albumIdArgument = null
+                    } else {
+                        albumIdArgument = argumentBundle.getString(NAV_ARG_ALBUM_ID)
+                    }
+                    if (subsonicClient != null && albumIdArgument != null) {
+                        AlbumDetailScreen(
+                            albumId = albumIdArgument,
+                            subsonicClient = subsonicClient,
+                            onBackPressed = { navController.popBackStack() },
+                            onPlayQueue = onPlayQueue,
+                            contentPadding = innerPadding,
+                            modifier = Modifier,
+                        )
+                    }
+                }
+                composable(
+                    route = ROUTE_PLAYLIST_PATTERN,
+                    arguments = listOf(navArgument(NAV_ARG_PLAYLIST_ID) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val argumentBundle = backStackEntry.arguments
+                    val playlistIdArgument: String?
+                    if (argumentBundle == null) {
+                        playlistIdArgument = null
+                    } else {
+                        playlistIdArgument = argumentBundle.getString(NAV_ARG_PLAYLIST_ID)
+                    }
+                    if (subsonicClient != null && playlistIdArgument != null) {
+                        PlaylistDetailScreen(
+                            playlistId = playlistIdArgument,
+                            subsonicClient = subsonicClient,
+                            onBackPressed = { navController.popBackStack() },
+                            onPlayQueue = onPlayQueue,
+                            contentPadding = innerPadding,
+                            modifier = Modifier,
+                        )
+                    }
+                }
+                composable(
+                    route = ROUTE_ARTIST_PATTERN,
+                    arguments = listOf(navArgument(NAV_ARG_ARTIST_ID) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val argumentBundle = backStackEntry.arguments
+                    val artistIdArgument: String?
+                    if (argumentBundle == null) {
+                        artistIdArgument = null
+                    } else {
+                        artistIdArgument = argumentBundle.getString(NAV_ARG_ARTIST_ID)
+                    }
+                    if (subsonicClient != null && artistIdArgument != null) {
+                        ArtistDetailScreen(
+                            artistId = artistIdArgument,
+                            subsonicClient = subsonicClient,
+                            onBackPressed = { navController.popBackStack() },
+                            onAlbumSelected = { selectedAlbumId: String ->
+                                navController.navigate(buildAlbumRoute(selectedAlbumId))
+                            },
+                            contentPadding = innerPadding,
+                            modifier = Modifier,
+                        )
+                    }
                 }
                 composable(ROUTE_SETTINGS) {
                     SettingsScreen(

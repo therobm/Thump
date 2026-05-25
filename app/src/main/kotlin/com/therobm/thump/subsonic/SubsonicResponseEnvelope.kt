@@ -35,6 +35,9 @@ data class SubsonicResponseEnvelope(
     val albumList2: StandardAlbumList2Payload? = null,
     val playlists: StandardPlaylistsPayload? = null,
     val starred2: StandardStarred2Payload? = null,
+    val album: StandardAlbumDetailPayload? = null,
+    val playlist: StandardPlaylistDetailPayload? = null,
+    val artist: StandardArtistDetailPayload? = null,
 )
 
 @Serializable
