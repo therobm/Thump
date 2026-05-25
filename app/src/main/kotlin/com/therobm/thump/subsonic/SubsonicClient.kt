@@ -92,7 +92,16 @@ class SubsonicClient(
     }
 
     private fun buildEndpointUrl(endpointMethodName: String): String {
-        val base = credentials.serverUrl.trimEnd('/')
+        val trimmed = credentials.serverUrl.trimEnd('/')
+        // If the user omitted a scheme, default to http. https takes precedence when explicitly
+        // provided; this default only kicks in for LAN servers typed as bare host[:port].
+        val base: String
+        val lowerCased = trimmed.lowercase()
+        if (lowerCased.startsWith("http://") || lowerCased.startsWith("https://")) {
+            base = trimmed
+        } else {
+            base = "http://" + trimmed
+        }
         val builder = "$base/rest/$endpointMethodName".toHttpUrl().newBuilder()
 
         builder.addQueryParameter("u", credentials.username)
