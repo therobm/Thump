@@ -180,7 +180,7 @@ private fun AlbumDetailContent(
             ) {
                 Button(
                     onClick = {
-                        val queue = buildAlbumQueue(album.song, subsonicClient)
+                        val queue = buildAlbumQueue(album.song, album.name, subsonicClient)
                         if (queue.isNotEmpty()) {
                             onPlayQueue(queue, 0)
                         }
@@ -194,7 +194,7 @@ private fun AlbumDetailContent(
                 }
                 OutlinedButton(
                     onClick = {
-                        val queue = buildAlbumQueue(album.song, subsonicClient).shuffled()
+                        val queue = buildAlbumQueue(album.song, album.name, subsonicClient).shuffled()
                         if (queue.isNotEmpty()) {
                             onPlayQueue(queue, 0)
                         }
@@ -213,7 +213,7 @@ private fun AlbumDetailContent(
                 song = song,
                 rowNumber = rowIndex + 1,
                 onTapped = {
-                    val queue = buildAlbumQueue(album.song, subsonicClient)
+                    val queue = buildAlbumQueue(album.song, album.name, subsonicClient)
                     if (queue.isNotEmpty()) {
                         onPlayQueue(queue, rowIndex)
                     }
@@ -288,6 +288,7 @@ private fun buildAlbumMetadataLine(album: StandardAlbumDetailPayload): String {
 
 private fun buildAlbumQueue(
     songs: List<StandardSongDetail>,
+    albumName: String,
     subsonicClient: SubsonicClient,
 ): List<PlaybackQueueItem> {
     val result = ArrayList<PlaybackQueueItem>(songs.size)
@@ -307,6 +308,7 @@ private fun buildAlbumQueue(
                 streamUrl = subsonicClient.buildStreamUrl(song.id),
                 title = song.title,
                 artist = textOrFallback(song.artist, ""),
+                album = albumName,
                 coverArtUrl = coverArtUrl,
             )
         )

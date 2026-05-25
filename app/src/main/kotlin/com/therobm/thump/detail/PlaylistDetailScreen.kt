@@ -289,6 +289,7 @@ private fun buildPlaylistQueue(
                 streamUrl = subsonicClient.buildStreamUrl(song.id),
                 title = song.title,
                 artist = textOrFallback(song.artist, ""),
+                album = song.album,
                 coverArtUrl = coverArtUrl,
             )
         )
