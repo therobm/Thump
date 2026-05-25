@@ -52,9 +52,11 @@ class ThumpPlaybackService : MediaLibraryService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
+        val cacheFactory = AudioCacheFactory(applicationContext)
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setMediaSourceFactory(cacheFactory.buildMediaSourceFactory())
             .build()
 
         player.addListener(buildPlayerListener(player))
