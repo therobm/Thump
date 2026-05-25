@@ -2,6 +2,9 @@
 
 OpenSubsonic music player for Android. Works with any OpenSubsonic server. Optional support for Pulse-specific endpoints when connected to a Pulse server.
 
+Pulse server available here
+https://github.com/therobm/Pulse
+
 See `Docs/spec.md` for the full specification.
 
 ## Build
