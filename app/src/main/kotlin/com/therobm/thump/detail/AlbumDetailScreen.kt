@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
 import com.therobm.thump.playback.PlaybackQueueItem
+import com.therobm.thump.playback.PlaybackSource
+import com.therobm.thump.playback.PlaybackSourceKind
 import com.therobm.thump.subsonic.StandardAlbumDetailPayload
 import com.therobm.thump.subsonic.StandardSongDetail
 import com.therobm.thump.subsonic.SubsonicClient
@@ -54,7 +56,7 @@ fun AlbumDetailScreen(
     albumId: String,
     subsonicClient: SubsonicClient,
     onBackPressed: () -> Unit,
-    onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit,
+    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier,
 ) {
@@ -109,7 +111,7 @@ fun AlbumDetailScreen(
 private fun AlbumDetailContent(
     album: StandardAlbumDetailPayload,
     subsonicClient: SubsonicClient,
-    onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit,
+    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
     val coverArtId = album.coverArt
     val coverArtUrl: String?
@@ -180,9 +182,9 @@ private fun AlbumDetailContent(
             ) {
                 Button(
                     onClick = {
-                        val queue = buildAlbumQueue(album.song, subsonicClient)
+                        val queue = buildAlbumQueue(album.song, album.name, subsonicClient)
                         if (queue.isNotEmpty()) {
-                            onPlayQueue(queue, 0)
+                            onPlayQueue(queue, 0, PlaybackSource(PlaybackSourceKind.Album, album.name))
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ThumpColors.Accent),
@@ -194,9 +196,9 @@ private fun AlbumDetailContent(
                 }
                 OutlinedButton(
                     onClick = {
-                        val queue = buildAlbumQueue(album.song, subsonicClient).shuffled()
+                        val queue = buildAlbumQueue(album.song, album.name, subsonicClient).shuffled()
                         if (queue.isNotEmpty()) {
-                            onPlayQueue(queue, 0)
+                            onPlayQueue(queue, 0, PlaybackSource(PlaybackSourceKind.Album, album.name))
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -213,9 +215,9 @@ private fun AlbumDetailContent(
                 song = song,
                 rowNumber = rowIndex + 1,
                 onTapped = {
-                    val queue = buildAlbumQueue(album.song, subsonicClient)
+                    val queue = buildAlbumQueue(album.song, album.name, subsonicClient)
                     if (queue.isNotEmpty()) {
-                        onPlayQueue(queue, rowIndex)
+                        onPlayQueue(queue, rowIndex, PlaybackSource(PlaybackSourceKind.Album, album.name))
                     }
                 },
             )
@@ -288,6 +290,7 @@ private fun buildAlbumMetadataLine(album: StandardAlbumDetailPayload): String {
 
 private fun buildAlbumQueue(
     songs: List<StandardSongDetail>,
+    albumName: String,
     subsonicClient: SubsonicClient,
 ): List<PlaybackQueueItem> {
     val result = ArrayList<PlaybackQueueItem>(songs.size)
@@ -307,6 +310,7 @@ private fun buildAlbumQueue(
                 streamUrl = subsonicClient.buildStreamUrl(song.id),
                 title = song.title,
                 artist = textOrFallback(song.artist, ""),
+                album = albumName,
                 coverArtUrl = coverArtUrl,
             )
         )

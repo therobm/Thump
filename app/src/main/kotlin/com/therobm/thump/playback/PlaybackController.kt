@@ -27,6 +27,7 @@ class PlaybackController(applicationContext: Context) {
     val nowPlaying: StateFlow<NowPlaying?> = nowPlayingFlow
 
     private var currentQueueMetadata: List<PlaybackQueueItem> = emptyList()
+    private var currentQueueSource: PlaybackSource? = null
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -46,7 +47,7 @@ class PlaybackController(applicationContext: Context) {
      * Items at indexes after startIndex are queued behind it; ExoPlayer auto-advances through
      * the queue when each track finishes.
      */
-    fun playQueue(items: List<PlaybackQueueItem>, startIndex: Int) {
+    fun playQueue(items: List<PlaybackQueueItem>, startIndex: Int, source: PlaybackSource?) {
         if (items.isEmpty()) {
             return
         }
@@ -60,6 +61,7 @@ class PlaybackController(applicationContext: Context) {
         }
 
         currentQueueMetadata = items
+        currentQueueSource = source
 
         val mediaItems = ArrayList<MediaItem>(items.size)
         val itemCount = items.size
@@ -84,6 +86,76 @@ class PlaybackController(applicationContext: Context) {
         if (!exoPlayer.isPlaying) {
             exoPlayer.play()
         }
+    }
+
+    /**
+     * Move to the next item in the queue. No-op if there is no next item.
+     */
+    fun skipToNext() {
+        if (exoPlayer.hasNextMediaItem()) {
+            exoPlayer.seekToNext()
+        }
+    }
+
+    /**
+     * Move to the previous item in the queue. Convention follows most media apps: if the user
+     * is more than a few seconds into the current track, the press restarts the current track
+     * instead of going back.
+     */
+    fun skipToPrevious() {
+        if (exoPlayer.currentPosition > PREVIOUS_RESTART_THRESHOLD_MS) {
+            exoPlayer.seekTo(0L)
+            return
+        }
+        if (exoPlayer.hasPreviousMediaItem()) {
+            exoPlayer.seekToPrevious()
+            return
+        }
+        exoPlayer.seekTo(0L)
+    }
+
+    /**
+     * Seek to an absolute position inside the current track. Clamps to [0, duration].
+     */
+    fun seekTo(positionMs: Long) {
+        val duration = exoPlayer.duration
+        val clamped: Long
+        if (positionMs < 0L) {
+            clamped = 0L
+        } else if (duration > 0L && positionMs > duration) {
+            clamped = duration
+        } else {
+            clamped = positionMs
+        }
+        exoPlayer.seekTo(clamped)
+    }
+
+    /**
+     * Current playback position inside the active track, in milliseconds. Polled from the UI
+     * for the seek bar — ExoPlayer does not expose a flow for this.
+     */
+    fun currentPositionMs(): Long {
+        return exoPlayer.currentPosition
+    }
+
+    /**
+     * Total duration of the active track, in milliseconds. Returns 0 when unknown (e.g. before
+     * the player has loaded the track).
+     */
+    fun durationMs(): Long {
+        val duration = exoPlayer.duration
+        if (duration <= 0L) {
+            return 0L
+        }
+        return duration
+    }
+
+    fun hasNext(): Boolean {
+        return exoPlayer.hasNextMediaItem()
+    }
+
+    fun hasPrevious(): Boolean {
+        return exoPlayer.hasPreviousMediaItem()
     }
 
     fun release() {
@@ -115,8 +187,16 @@ class PlaybackController(applicationContext: Context) {
             trackId = item.trackId,
             title = item.title,
             artist = item.artist,
+            album = item.album,
             coverArtUrl = item.coverArtUrl,
             isPlaying = isPlayingHint,
+            source = currentQueueSource,
         )
+    }
+
+    companion object {
+        // Pressing previous within this many ms of the start of a track moves to the previous
+        // track. After this, previous restarts the current track. Standard media-app convention.
+        private const val PREVIOUS_RESTART_THRESHOLD_MS: Long = 3000L
     }
 }

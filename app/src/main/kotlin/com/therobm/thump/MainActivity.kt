@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -46,6 +47,7 @@ import com.therobm.thump.detail.AlbumDetailScreen
 import com.therobm.thump.detail.ArtistDetailScreen
 import com.therobm.thump.detail.PlaylistDetailScreen
 import com.therobm.thump.home.HomeCarouselItem
+import com.therobm.thump.nowplaying.NowPlayingScreen
 import com.therobm.thump.home.HomeItemKind
 import com.therobm.thump.home.HomeScreen
 import com.therobm.thump.library.LibraryScreen
@@ -53,6 +55,7 @@ import com.therobm.thump.playback.MiniPlayer
 import com.therobm.thump.playback.NowPlaying
 import com.therobm.thump.playback.PlaybackController
 import com.therobm.thump.playback.PlaybackQueueItem
+import com.therobm.thump.playback.PlaybackSource
 import com.therobm.thump.search.SearchScreen
 import com.therobm.thump.settings.SettingsScreen
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -86,6 +89,7 @@ private const val ROUTE_HOME = "home"
 private const val ROUTE_LIBRARY = "library"
 private const val ROUTE_SEARCH = "search"
 private const val ROUTE_SETTINGS = "settings"
+private const val ROUTE_NOW_PLAYING = "nowplaying"
 
 private const val NAV_ARG_ALBUM_ID = "albumId"
 private const val NAV_ARG_PLAYLIST_ID = "playlistId"
@@ -146,8 +150,9 @@ private fun ThumpApp() {
 
         val navController = rememberNavController()
 
-        val onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit = { items: List<PlaybackQueueItem>, startIndex: Int ->
-            playbackController.playQueue(items, startIndex)
+        val onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit = {
+            items: List<PlaybackQueueItem>, startIndex: Int, source: PlaybackSource? ->
+            playbackController.playQueue(items, startIndex, source)
         }
 
         val onHomeItemTapped: (HomeCarouselItem) -> Unit = { tappedItem: HomeCarouselItem ->
@@ -166,9 +171,10 @@ private fun ThumpApp() {
                             streamUrl = subsonicClient.buildStreamUrl(tappedItem.id),
                             title = tappedItem.title,
                             artist = tappedItem.subtitle,
+                            album = null,
                             coverArtUrl = tappedCoverArtUrl,
                         )
-                        playbackController.playQueue(listOf(singleItem), 0)
+                        playbackController.playQueue(listOf(singleItem), 0, null)
                     }
                     HomeItemKind.Album -> {
                         navController.navigate(buildAlbumRoute(tappedItem.id))
@@ -197,38 +203,12 @@ private fun ThumpApp() {
                 .fillMaxSize()
                 .background(ThumpColors.Background),
             bottomBar = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    val nowPlayingSnapshot = nowPlaying
-                    if (nowPlayingSnapshot != null) {
-                        MiniPlayer(
-                            nowPlaying = nowPlayingSnapshot,
-                            onPlayPauseClicked = {
-                                if (nowPlayingSnapshot.isPlaying) {
-                                    playbackController.pause()
-                                } else {
-                                    playbackController.resume()
-                                }
-                            },
-                        )
-                    }
-                    ThumpBottomBar(
+                if (currentRoute != ROUTE_NOW_PLAYING) {
+                    BottomBarStack(
+                        nowPlaying = nowPlaying,
                         currentRoute = currentRoute,
-                        onTabSelected = { destinationRoute: String ->
-                            // If the destination's already in the back stack (typical when the
-                            // user has drilled into a detail screen from that tab), pop back to
-                            // it rather than pushing a duplicate. Only navigate fresh when the
-                            // destination has not been visited yet on this session.
-                            val poppedExisting = navController.popBackStack(destinationRoute, inclusive = false)
-                            if (!poppedExisting) {
-                                navController.navigate(destinationRoute) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
+                        navController = navController,
+                        playbackController = playbackController,
                     )
                 }
             },
@@ -317,14 +297,25 @@ private fun ThumpApp() {
                         ArtistDetailScreen(
                             artistId = artistIdArgument,
                             subsonicClient = subsonicClient,
+                            isPulseServer = isPulseServer,
                             onBackPressed = { navController.popBackStack() },
                             onAlbumSelected = { selectedAlbumId: String ->
                                 navController.navigate(buildAlbumRoute(selectedAlbumId))
                             },
+                            onPlayQueue = onPlayQueue,
                             contentPadding = innerPadding,
                             modifier = Modifier,
                         )
                     }
+                }
+                composable(ROUTE_NOW_PLAYING) {
+                    NowPlayingScreen(
+                        nowPlaying = nowPlaying,
+                        playbackController = playbackController,
+                        onBackPressed = { navController.popBackStack() },
+                        contentPadding = innerPadding,
+                        modifier = Modifier,
+                    )
                 }
                 composable(ROUTE_SETTINGS) {
                     SettingsScreen(
@@ -372,6 +363,47 @@ private fun ConfigurePrompt(contentPadding: PaddingValues) {
         Text(
             text = "Open Settings to connect to your music server.",
             color = ThumpColors.TextSecondary,
+        )
+    }
+}
+
+@Composable
+private fun BottomBarStack(
+    nowPlaying: NowPlaying?,
+    currentRoute: String?,
+    navController: NavController,
+    playbackController: PlaybackController,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (nowPlaying != null) {
+            MiniPlayer(
+                nowPlaying = nowPlaying,
+                onPlayPauseClicked = {
+                    if (nowPlaying.isPlaying) {
+                        playbackController.pause()
+                    } else {
+                        playbackController.resume()
+                    }
+                },
+                onExpandClicked = {
+                    navController.navigate(ROUTE_NOW_PLAYING)
+                },
+            )
+        }
+        ThumpBottomBar(
+            currentRoute = currentRoute,
+            onTabSelected = { destinationRoute: String ->
+                val poppedExisting = navController.popBackStack(destinationRoute, inclusive = false)
+                if (!poppedExisting) {
+                    navController.navigate(destinationRoute) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            },
         )
     }
 }

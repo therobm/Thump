@@ -204,6 +204,21 @@ class SubsonicClient(
     }
 
     /**
+     * Calls the optional Pulse pulse/artistTracks endpoint, returning every track for an artist
+     * in (album-index, track-number) order. Only valid when the server has already been detected
+     * as a Pulse server. Standard OpenSubsonic clients fan out getAlbum per album instead.
+     */
+    suspend fun getPulseArtistTracks(artistId: String): SubsonicResult<List<PulseRecentlyPlayedTrack>> {
+        return callAndDecodeRaw(
+            pathAfterBase = "pulse/artistTracks",
+            extraQueryParameters = mapOf("id" to artistId),
+            payloadDeserializer = PulseArtistTracksResponse.serializer(),
+        ) { response: PulseArtistTracksResponse ->
+            response.tracks
+        }
+    }
+
+    /**
      * Calls the optional Pulse pulse/popularArtists endpoint. Only valid when the server has
      * already been detected as a Pulse server.
      */
