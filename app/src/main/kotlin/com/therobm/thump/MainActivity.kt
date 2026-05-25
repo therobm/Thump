@@ -1,5 +1,7 @@
 package com.therobm.thump
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -46,6 +49,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val PREFS_NAME = "thump_settings"
+private const val PREFS_KEY_SERVER_URL = "server_url"
+private const val PREFS_KEY_USERNAME = "username"
+// TODO: encrypt the stored password (Android Keystore / EncryptedSharedPreferences) when the real
+// Settings screen lands. Plain SharedPreferences is fine for the test harness on a dev device.
+private const val PREFS_KEY_PASSWORD = "password"
+private const val PREFS_KEY_USE_TOKEN_AUTH = "use_token_auth"
+private const val PREFS_KEY_PULSE_DETECTED_FOR_URL = "pulse_detected_for_url"
+private const val PREFS_KEY_PULSE_DETECTED_VALUE = "pulse_detected_value"
+
 @Composable
 private fun ThumpApp() {
     MaterialTheme {
@@ -63,11 +76,27 @@ private fun ThumpApp() {
 
 @Composable
 private fun PingTestScreen(modifier: Modifier) {
-    var serverUrl by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var useTokenAuth by remember { mutableStateOf(true) }
-    var resultText by remember { mutableStateOf("(no call yet)") }
+    val context = LocalContext.current
+    val sharedPreferences: SharedPreferences = remember(context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    var serverUrl by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_SERVER_URL)) }
+    var username by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_USERNAME)) }
+    var password by remember { mutableStateOf(readStringOrBlank(sharedPreferences, PREFS_KEY_PASSWORD)) }
+    var useTokenAuth by remember {
+        mutableStateOf(sharedPreferences.getBoolean(PREFS_KEY_USE_TOKEN_AUTH, true))
+    }
+
+    val initialCachedPulseLine: String
+    val cachedPulseUrl = sharedPreferences.getString(PREFS_KEY_PULSE_DETECTED_FOR_URL, null)
+    if (cachedPulseUrl != null && cachedPulseUrl == serverUrl.trim()) {
+        val cachedPulseValue = sharedPreferences.getBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, false)
+        initialCachedPulseLine = "Cached Pulse detection for this URL: " + cachedPulseValue
+    } else {
+        initialCachedPulseLine = "No cached Pulse detection for this URL yet"
+    }
+    var resultText by remember { mutableStateOf(initialCachedPulseLine) }
     var isPinging by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -120,9 +149,20 @@ private fun PingTestScreen(modifier: Modifier) {
             onClick = {
                 isPinging = true
                 resultText = "pinging..."
+
+                val trimmedServerUrl = serverUrl.trim()
+                val trimmedUsername = username.trim()
+
+                val editor = sharedPreferences.edit()
+                editor.putString(PREFS_KEY_SERVER_URL, trimmedServerUrl)
+                editor.putString(PREFS_KEY_USERNAME, trimmedUsername)
+                editor.putString(PREFS_KEY_PASSWORD, password)
+                editor.putBoolean(PREFS_KEY_USE_TOKEN_AUTH, useTokenAuth)
+                editor.apply()
+
                 val credentials = SubsonicCredentials(
-                    serverUrl = serverUrl.trim(),
-                    username = username.trim(),
+                    serverUrl = trimmedServerUrl,
+                    username = trimmedUsername,
                     password = password,
                 )
                 val authMode: SubsonicAuthMode
@@ -139,7 +179,24 @@ private fun PingTestScreen(modifier: Modifier) {
                 )
                 coroutineScope.launch {
                     val pingResult = client.ping()
-                    resultText = formatPingResult(pingResult)
+                    val pingDisplay = formatPingResult(pingResult)
+
+                    if (pingResult is SubsonicResult.Ok) {
+                        val probeResult = client.probePulseExtensions()
+                        val probeDisplay = formatProbeResult(probeResult)
+
+                        if (probeResult is SubsonicResult.Ok) {
+                            val probeEditor = sharedPreferences.edit()
+                            probeEditor.putString(PREFS_KEY_PULSE_DETECTED_FOR_URL, trimmedServerUrl)
+                            probeEditor.putBoolean(PREFS_KEY_PULSE_DETECTED_VALUE, probeResult.value)
+                            probeEditor.apply()
+                        }
+
+                        resultText = pingDisplay + "\n\n" + probeDisplay
+                    } else {
+                        resultText = pingDisplay
+                    }
+
                     isPinging = false
                 }
             },
@@ -149,6 +206,14 @@ private fun PingTestScreen(modifier: Modifier) {
 
         Text(text = resultText)
     }
+}
+
+private fun readStringOrBlank(sharedPreferences: SharedPreferences, key: String): String {
+    val storedValue: String? = sharedPreferences.getString(key, null)
+    if (storedValue == null) {
+        return ""
+    }
+    return storedValue
 }
 
 private fun buildPingTestHttpClient(): OkHttpClient {
@@ -184,7 +249,7 @@ private fun formatPingResult(result: SubsonicResult<SubsonicPingResult>): String
                 serverVersionText = value.serverVersion
             }
             return buildString {
-                append("OK\n")
+                append("Ping OK\n")
                 append("protocol: ").append(value.protocolVersion).append('\n')
                 append("server type: ").append(serverTypeText).append('\n')
                 append("server version: ").append(serverVersionText).append('\n')
@@ -192,13 +257,34 @@ private fun formatPingResult(result: SubsonicResult<SubsonicPingResult>): String
             }
         }
         is SubsonicResult.ServerError -> {
-            return "Server error " + result.code + ": " + result.message
+            return "Ping server error " + result.code + ": " + result.message
         }
         is SubsonicResult.TransportError -> {
-            return "Transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Ping transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
         }
         is SubsonicResult.MalformedResponse -> {
-            return "Malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Ping malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+        }
+    }
+}
+
+private fun formatProbeResult(result: SubsonicResult<Boolean>): String {
+    when (result) {
+        is SubsonicResult.Ok -> {
+            if (result.value) {
+                return "Pulse extensions: DETECTED"
+            } else {
+                return "Pulse extensions: not present (standard OpenSubsonic server)"
+            }
+        }
+        is SubsonicResult.ServerError -> {
+            return "Pulse probe server error " + result.code + ": " + result.message
+        }
+        is SubsonicResult.TransportError -> {
+            return "Pulse probe transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+        }
+        is SubsonicResult.MalformedResponse -> {
+            return "Pulse probe malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
         }
     }
 }
