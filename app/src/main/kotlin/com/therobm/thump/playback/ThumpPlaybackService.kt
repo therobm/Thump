@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import com.therobm.thump.settings.ThumpSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,9 @@ class ThumpPlaybackService : MediaLibraryService() {
     }
     private val persistence: PlaybackPersistence by lazy {
         PlaybackPersistence(applicationContext)
+    }
+    private val settings: ThumpSettings by lazy {
+        ThumpSettings(applicationContext)
     }
 
     // Scrobble state for the currently-playing track. Reset on every media-item transition.
@@ -139,12 +143,13 @@ class ThumpPlaybackService : MediaLibraryService() {
                 streamUrls.add(localConfig.uri.toString())
             }
         }
-        val currentIndex = player.currentMediaItemIndex
-        val activePrefetcher = prefetcher
+        val currentIndex: Int = player.currentMediaItemIndex
+        val activePrefetcher: AudioPrefetcher? = prefetcher
         if (activePrefetcher == null) {
             return
         }
-        activePrefetcher.startPrefetch(streamUrls, currentIndex)
+        val lookahead: Int = settings.getPrefetchLookahead()
+        activePrefetcher.startPrefetch(streamUrls, currentIndex, lookahead)
     }
 
     private fun restorePersistedStateInto(player: Player) {
@@ -252,6 +257,9 @@ class ThumpPlaybackService : MediaLibraryService() {
     }
 
     private fun fireScrobbleNowPlaying(trackId: String) {
+        if (!settings.getScrobbleEnabled()) {
+            return
+        }
         serviceCoroutineScope.launch {
             val client = credentialsLoader.loadSubsonicClient()
             if (client == null) {
@@ -262,6 +270,9 @@ class ThumpPlaybackService : MediaLibraryService() {
     }
 
     private fun fireScrobbleSubmission(trackId: String) {
+        if (!settings.getScrobbleEnabled()) {
+            return
+        }
         serviceCoroutineScope.launch {
             val client = credentialsLoader.loadSubsonicClient()
             if (client == null) {

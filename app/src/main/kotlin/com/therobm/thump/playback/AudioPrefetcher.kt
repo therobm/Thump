@@ -28,21 +28,26 @@ class AudioPrefetcher(
     private var activeWriter: CacheWriter? = null
 
     /**
-     * Kick off a prefetch of up to PREFETCH_LOOKAHEAD items after `currentIndex` in the
-     * queue. Each track is downloaded sequentially; a track that is already fully cached
-     * resolves almost instantly (CacheWriter detects the cached span and skips upstream).
+     * Kick off a prefetch of up to `lookahead` items after `currentIndex` in the queue. Each
+     * track is downloaded sequentially; a track that is already fully cached resolves almost
+     * instantly (CacheWriter detects the cached span and skips upstream). `lookahead` of 0 is
+     * a valid "prefetch disabled" value — the call becomes a no-op after cancelling any
+     * in-flight work.
      */
-    fun startPrefetch(streamUrls: List<String>, currentIndex: Int) {
+    fun startPrefetch(streamUrls: List<String>, currentIndex: Int, lookahead: Int) {
         cancelInFlight()
+        if (lookahead <= 0) {
+            return
+        }
         if (streamUrls.isEmpty()) {
             return
         }
-        val startIndex = currentIndex + 1
+        val startIndex: Int = currentIndex + 1
         if (startIndex >= streamUrls.size) {
             return
         }
         val endIndex: Int
-        val proposedEnd = startIndex + PREFETCH_LOOKAHEAD
+        val proposedEnd: Int = startIndex + lookahead
         if (proposedEnd > streamUrls.size) {
             endIndex = streamUrls.size
         } else {
@@ -54,15 +59,15 @@ class AudioPrefetcher(
                 if (!isActive) {
                     break
                 }
-                val streamUrl = streamUrls[i]
-                val dataSpec = DataSpec.Builder()
+                val streamUrl: String = streamUrls[i]
+                val dataSpec: DataSpec = DataSpec.Builder()
                     .setUri(streamUrl)
                     .build()
-                val rawDataSource = cacheDataSourceFactory.createDataSource()
+                val rawDataSource: androidx.media3.datasource.DataSource = cacheDataSourceFactory.createDataSource()
                 if (rawDataSource !is CacheDataSource) {
                     continue
                 }
-                val writer = CacheWriter(rawDataSource, dataSpec, null, null)
+                val writer: CacheWriter = CacheWriter(rawDataSource, dataSpec, null, null)
                 activeWriter = writer
                 try {
                     writer.cache()
@@ -77,22 +82,15 @@ class AudioPrefetcher(
     }
 
     fun cancelInFlight() {
-        val job = currentJob
+        val job: Job? = currentJob
         if (job != null) {
             job.cancel()
             currentJob = null
         }
-        val writer = activeWriter
+        val writer: CacheWriter? = activeWriter
         if (writer != null) {
             writer.cancel()
             activeWriter = null
         }
-    }
-
-    companion object {
-        // Spec default — fetch the next 10 tracks while the current one plays. Plenty of head
-        // start for the "tunnel mid-playlist" case the spec calls out. Tunable later once the
-        // Settings screen exposes it.
-        private const val PREFETCH_LOOKAHEAD: Int = 10
     }
 }

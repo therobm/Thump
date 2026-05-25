@@ -3,15 +3,22 @@ package com.therobm.thump.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,9 +27,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.therobm.thump.ThumpColors
+import com.therobm.thump.playback.AudioCacheFactory
 import com.therobm.thump.subsonic.SubsonicAuthMode
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicCredentials
@@ -33,15 +44,17 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
 /**
- * The Settings screen.
+ * The real Settings tab. Sections, top to bottom:
  *
- * In its current form this is the same ping/probe form that lived in MainActivity during the
- * subsonic-client and pulse-detect-and-persist work. It will grow real settings rows (cache
- * size, scrobble toggle, normalize volume, clear cache) once those features land.
+ * - **Server**: URL / username / password / auth mode + Connect button. Connect runs the same
+ *   ping + Pulse probe the old test screen ran; on success it calls back into the host so
+ *   credentials get persisted and the rest of the app rebuilds against the new server.
+ * - **Playback**: scrobble toggle, prefetch-lookahead slider, volume-normalize chip row.
+ * - **Cache**: cache-size slider, "Clear cache" action.
  *
- * On a successful ping the screen calls back to the host with the new credentials and the
- * detected Pulse status so the rest of the app can rebuild its SubsonicClient. The host owns
- * persistence — this screen does not touch SharedPreferences itself.
+ * Server credentials still live in the host's SharedPreferences (managed by MainActivity)
+ * because the playback service reads them from the same store. Everything else (prefetch
+ * limit, scrobble toggle, cache size, normalize mode) lives in the new ThumpSettings store.
  */
 @Composable
 fun SettingsScreen(
@@ -55,12 +68,21 @@ fun SettingsScreen(
     onCredentialsUpdated: (serverUrl: String, username: String, password: String, useTokenAuth: Boolean, isPulseServer: Boolean) -> Unit,
     modifier: Modifier,
 ) {
-    var serverUrl by remember { mutableStateOf(initialServerUrl) }
-    var username by remember { mutableStateOf(initialUsername) }
-    var password by remember { mutableStateOf(initialPassword) }
-    var useTokenAuth by remember { mutableStateOf(initialUseTokenAuth) }
-    var resultText by remember { mutableStateOf("(no call yet)") }
-    var isPinging by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val settings: ThumpSettings = remember(context) { ThumpSettings(context.applicationContext) }
+
+    var serverUrl: String by remember { mutableStateOf(initialServerUrl) }
+    var username: String by remember { mutableStateOf(initialUsername) }
+    var password: String by remember { mutableStateOf(initialPassword) }
+    var useTokenAuth: Boolean by remember { mutableStateOf(initialUseTokenAuth) }
+    var connectResultText: String by remember { mutableStateOf("") }
+    var isConnecting: Boolean by remember { mutableStateOf(false) }
+
+    var prefetchLookahead: Int by remember { mutableStateOf(settings.getPrefetchLookahead()) }
+    var audioCacheSizeBytes: Long by remember { mutableStateOf(settings.getAudioCacheSizeBytes()) }
+    var scrobbleEnabled: Boolean by remember { mutableStateOf(settings.getScrobbleEnabled()) }
+    var normalizeMode: String by remember { mutableStateOf(settings.getNormalizeMode()) }
+    var clearCacheNoticeText: String by remember { mutableStateOf("") }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -75,11 +97,11 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(contentPadding)
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = "Server", style = MaterialTheme.typography.titleLarge)
+        SectionHeader(title = "Server")
 
         OutlinedTextField(
             value = serverUrl,
@@ -117,14 +139,13 @@ fun SettingsScreen(
         )
 
         Button(
-            enabled = !isPinging && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
+            enabled = !isConnecting && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
             onClick = {
-                isPinging = true
-                resultText = "pinging..."
-
-                val trimmedServerUrl = serverUrl.trim()
-                val trimmedUsername = username.trim()
-                val credentials = SubsonicCredentials(
+                isConnecting = true
+                connectResultText = "Connecting..."
+                val trimmedServerUrl: String = serverUrl.trim()
+                val trimmedUsername: String = username.trim()
+                val credentials: SubsonicCredentials = SubsonicCredentials(
                     serverUrl = trimmedServerUrl,
                     username = trimmedUsername,
                     password = password,
@@ -135,7 +156,7 @@ fun SettingsScreen(
                 } else {
                     authMode = SubsonicAuthMode.Legacy
                 }
-                val client = SubsonicClient(
+                val client: SubsonicClient = SubsonicClient(
                     okHttpClient = httpClient,
                     jsonDecoder = jsonDecoder,
                     credentials = credentials,
@@ -143,14 +164,12 @@ fun SettingsScreen(
                 )
 
                 coroutineScope.launch {
-                    val pingResult = client.ping()
-                    val pingDisplay = formatPingResult(pingResult)
-
+                    val pingResult: SubsonicResult<SubsonicPingResult> = client.ping()
+                    val pingDisplay: String = formatPingResult(pingResult)
                     if (pingResult is SubsonicResult.Ok) {
-                        val probeResult = client.probePulseExtensions()
-                        val probeDisplay = formatProbeResult(probeResult)
-                        resultText = pingDisplay + "\n\n" + probeDisplay
-
+                        val probeResult: SubsonicResult<Boolean> = client.probePulseExtensions()
+                        val probeDisplay: String = formatProbeResult(probeResult)
+                        connectResultText = pingDisplay + "\n" + probeDisplay
                         val detectedIsPulse: Boolean
                         if (probeResult is SubsonicResult.Ok) {
                             detectedIsPulse = probeResult.value
@@ -165,24 +184,194 @@ fun SettingsScreen(
                             detectedIsPulse,
                         )
                     } else {
-                        resultText = pingDisplay
+                        connectResultText = pingDisplay
                     }
-
-                    isPinging = false
+                    isConnecting = false
                 }
             },
+            colors = ButtonDefaults.buttonColors(containerColor = ThumpColors.Accent),
         ) {
             Text(text = "Connect")
         }
+        if (connectResultText.isNotEmpty()) {
+            Text(
+                text = connectResultText,
+                style = MaterialTheme.typography.bodySmall,
+                color = ThumpColors.TextSecondary,
+            )
+        }
 
-        Text(text = resultText)
+        SectionDivider()
+        SectionHeader(title = "Playback")
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Scrobble plays to the server",
+                color = ThumpColors.OnBackground,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = scrobbleEnabled,
+                onCheckedChange = { newValue: Boolean ->
+                    scrobbleEnabled = newValue
+                    settings.setScrobbleEnabled(newValue)
+                },
+            )
+        }
+
+        Text(
+            text = "Prefetch upcoming tracks: " + prefetchLookahead,
+            color = ThumpColors.OnBackground,
+        )
+        Slider(
+            value = prefetchLookahead.toFloat(),
+            onValueChange = { newValue: Float -> prefetchLookahead = newValue.toInt() },
+            onValueChangeFinished = {
+                settings.setPrefetchLookahead(prefetchLookahead)
+            },
+            valueRange = ThumpSettings.MIN_PREFETCH_LOOKAHEAD.toFloat()..ThumpSettings.MAX_PREFETCH_LOOKAHEAD.toFloat(),
+            steps = ThumpSettings.MAX_PREFETCH_LOOKAHEAD - ThumpSettings.MIN_PREFETCH_LOOKAHEAD - 1,
+        )
+        Text(
+            text = "Set to 0 to disable prefetch. Spec default is 10.",
+            style = MaterialTheme.typography.bodySmall,
+            color = ThumpColors.TextSecondary,
+        )
+
+        Text(
+            text = "Normalize volume",
+            color = ThumpColors.OnBackground,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NormalizeChip(
+                label = "Off",
+                value = ThumpSettings.NORMALIZE_MODE_OFF,
+                selected = normalizeMode,
+                onSelected = { newValue: String ->
+                    normalizeMode = newValue
+                    settings.setNormalizeMode(newValue)
+                },
+            )
+            NormalizeChip(
+                label = "Per track",
+                value = ThumpSettings.NORMALIZE_MODE_TRACK,
+                selected = normalizeMode,
+                onSelected = { newValue: String ->
+                    normalizeMode = newValue
+                    settings.setNormalizeMode(newValue)
+                },
+            )
+            NormalizeChip(
+                label = "Per album",
+                value = ThumpSettings.NORMALIZE_MODE_ALBUM,
+                selected = normalizeMode,
+                onSelected = { newValue: String ->
+                    normalizeMode = newValue
+                    settings.setNormalizeMode(newValue)
+                },
+            )
+        }
+        Text(
+            text = "ReplayGain integration is not wired up yet; the picker only stores your preference for now.",
+            style = MaterialTheme.typography.bodySmall,
+            color = ThumpColors.TextSecondary,
+        )
+
+        SectionDivider()
+        SectionHeader(title = "Cache")
+
+        Text(
+            text = "Audio cache size: " + formatBytes(audioCacheSizeBytes),
+            color = ThumpColors.OnBackground,
+        )
+        Slider(
+            value = audioCacheSizeBytes.toFloat(),
+            onValueChange = { newValue: Float -> audioCacheSizeBytes = newValue.toLong() },
+            onValueChangeFinished = {
+                settings.setAudioCacheSizeBytes(audioCacheSizeBytes)
+            },
+            valueRange = ThumpSettings.MIN_AUDIO_CACHE_SIZE_BYTES.toFloat()..ThumpSettings.MAX_AUDIO_CACHE_SIZE_BYTES.toFloat(),
+        )
+        Text(
+            text = "Range 100 MB – 5 GB. Restart the app for size changes to take effect.",
+            style = MaterialTheme.typography.bodySmall,
+            color = ThumpColors.TextSecondary,
+        )
+
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    AudioCacheFactory.clearCache(context.applicationContext)
+                    clearCacheNoticeText = "Cache cleared."
+                }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = ThumpColors.Surface),
+        ) {
+            Text(text = "Clear cache", color = ThumpColors.OnBackground)
+        }
+        if (clearCacheNoticeText.isNotEmpty()) {
+            Text(
+                text = clearCacheNoticeText,
+                style = MaterialTheme.typography.bodySmall,
+                color = ThumpColors.TextSecondary,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        color = ThumpColors.OnBackground,
+    )
+}
+
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(
+        thickness = 1.dp,
+        color = ThumpColors.Divider,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun NormalizeChip(
+    label: String,
+    value: String,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    FilterChip(
+        selected = selected == value,
+        onClick = { onSelected(value) },
+        label = { Text(text = label) },
+    )
+}
+
+private fun formatBytes(bytes: Long): String {
+    val mb: Long = bytes / (1024L * 1024L)
+    if (mb >= 1024L) {
+        val gb: Double = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
+        val tenths: Long = (gb * 10.0).toLong()
+        val whole: Long = tenths / 10L
+        val fraction: Long = tenths % 10L
+        return whole.toString() + "." + fraction.toString() + " GB"
+    }
+    return mb.toString() + " MB"
 }
 
 private fun formatPingResult(result: SubsonicResult<SubsonicPingResult>): String {
     when (result) {
         is SubsonicResult.Ok -> {
-            val value = result.value
+            val value: SubsonicPingResult = result.value
             val serverTypeText: String
             if (value.serverType == null) {
                 serverTypeText = "(unknown)"
@@ -196,21 +385,22 @@ private fun formatPingResult(result: SubsonicResult<SubsonicPingResult>): String
                 serverVersionText = value.serverVersion
             }
             return buildString {
-                append("Ping OK\n")
-                append("protocol: ").append(value.protocolVersion).append('\n')
-                append("server type: ").append(serverTypeText).append('\n')
-                append("server version: ").append(serverVersionText).append('\n')
-                append("OpenSubsonic: ").append(value.isOpenSubsonicServer)
+                append("Ping OK — ")
+                append(serverTypeText)
+                append(' ')
+                append(serverVersionText)
+                append(", protocol ")
+                append(value.protocolVersion)
             }
         }
         is SubsonicResult.ServerError -> {
-            return "Ping server error " + result.code + ": " + result.message
+            return "Server error " + result.code + ": " + result.message
         }
         is SubsonicResult.TransportError -> {
-            return "Ping transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Network error: " + result.cause.javaClass.simpleName
         }
         is SubsonicResult.MalformedResponse -> {
-            return "Ping malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Bad response: " + result.cause.javaClass.simpleName
         }
     }
 }
@@ -219,19 +409,19 @@ private fun formatProbeResult(result: SubsonicResult<Boolean>): String {
     when (result) {
         is SubsonicResult.Ok -> {
             if (result.value) {
-                return "Pulse extensions: DETECTED"
+                return "Pulse extensions detected."
             } else {
-                return "Pulse extensions: not present (standard OpenSubsonic server)"
+                return "Standard OpenSubsonic server."
             }
         }
         is SubsonicResult.ServerError -> {
-            return "Pulse probe server error " + result.code + ": " + result.message
+            return "Pulse probe server error " + result.code
         }
         is SubsonicResult.TransportError -> {
-            return "Pulse probe transport error: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Pulse probe network error"
         }
         is SubsonicResult.MalformedResponse -> {
-            return "Pulse probe malformed response: " + result.cause.javaClass.simpleName + " - " + result.cause.message
+            return "Pulse probe response unreadable"
         }
     }
 }
