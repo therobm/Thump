@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
 import com.therobm.thump.playback.PlaybackQueueItem
+import com.therobm.thump.playback.PlaybackSource
+import com.therobm.thump.playback.PlaybackSourceKind
 import com.therobm.thump.subsonic.StandardPlaylistDetailPayload
 import com.therobm.thump.subsonic.StandardSongDetail
 import com.therobm.thump.subsonic.SubsonicClient
@@ -54,7 +56,7 @@ fun PlaylistDetailScreen(
     playlistId: String,
     subsonicClient: SubsonicClient,
     onBackPressed: () -> Unit,
-    onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit,
+    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier,
 ) {
@@ -109,7 +111,7 @@ fun PlaylistDetailScreen(
 private fun PlaylistDetailContent(
     playlist: StandardPlaylistDetailPayload,
     subsonicClient: SubsonicClient,
-    onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit,
+    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
 ) {
     val coverArtId = playlist.coverArt
     val coverArtUrl: String?
@@ -176,7 +178,7 @@ private fun PlaylistDetailContent(
                     onClick = {
                         val queue = buildPlaylistQueue(playlist.entry, subsonicClient)
                         if (queue.isNotEmpty()) {
-                            onPlayQueue(queue, 0)
+                            onPlayQueue(queue, 0, PlaybackSource(PlaybackSourceKind.Playlist, playlist.name))
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ThumpColors.Accent),
@@ -190,7 +192,7 @@ private fun PlaylistDetailContent(
                     onClick = {
                         val queue = buildPlaylistQueue(playlist.entry, subsonicClient).shuffled()
                         if (queue.isNotEmpty()) {
-                            onPlayQueue(queue, 0)
+                            onPlayQueue(queue, 0, PlaybackSource(PlaybackSourceKind.Playlist, playlist.name))
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -208,7 +210,7 @@ private fun PlaylistDetailContent(
                 onTapped = {
                     val queue = buildPlaylistQueue(playlist.entry, subsonicClient)
                     if (queue.isNotEmpty()) {
-                        onPlayQueue(queue, rowIndex)
+                        onPlayQueue(queue, rowIndex, PlaybackSource(PlaybackSourceKind.Playlist, playlist.name))
                     }
                 },
             )

@@ -27,6 +27,7 @@ class PlaybackController(applicationContext: Context) {
     val nowPlaying: StateFlow<NowPlaying?> = nowPlayingFlow
 
     private var currentQueueMetadata: List<PlaybackQueueItem> = emptyList()
+    private var currentQueueSource: PlaybackSource? = null
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -46,7 +47,7 @@ class PlaybackController(applicationContext: Context) {
      * Items at indexes after startIndex are queued behind it; ExoPlayer auto-advances through
      * the queue when each track finishes.
      */
-    fun playQueue(items: List<PlaybackQueueItem>, startIndex: Int) {
+    fun playQueue(items: List<PlaybackQueueItem>, startIndex: Int, source: PlaybackSource?) {
         if (items.isEmpty()) {
             return
         }
@@ -60,6 +61,7 @@ class PlaybackController(applicationContext: Context) {
         }
 
         currentQueueMetadata = items
+        currentQueueSource = source
 
         val mediaItems = ArrayList<MediaItem>(items.size)
         val itemCount = items.size
@@ -188,6 +190,7 @@ class PlaybackController(applicationContext: Context) {
             album = item.album,
             coverArtUrl = item.coverArtUrl,
             isPlaying = isPlayingHint,
+            source = currentQueueSource,
         )
     }
 

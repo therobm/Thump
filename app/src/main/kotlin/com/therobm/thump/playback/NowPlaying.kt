@@ -15,4 +15,5 @@ data class NowPlaying(
     val album: String?,
     val coverArtUrl: String?,
     val isPlaying: Boolean,
+    val source: PlaybackSource?,
 )

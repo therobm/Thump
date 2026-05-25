@@ -55,6 +55,7 @@ import com.therobm.thump.playback.MiniPlayer
 import com.therobm.thump.playback.NowPlaying
 import com.therobm.thump.playback.PlaybackController
 import com.therobm.thump.playback.PlaybackQueueItem
+import com.therobm.thump.playback.PlaybackSource
 import com.therobm.thump.search.SearchScreen
 import com.therobm.thump.settings.SettingsScreen
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -149,8 +150,9 @@ private fun ThumpApp() {
 
         val navController = rememberNavController()
 
-        val onPlayQueue: (List<PlaybackQueueItem>, Int) -> Unit = { items: List<PlaybackQueueItem>, startIndex: Int ->
-            playbackController.playQueue(items, startIndex)
+        val onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit = {
+            items: List<PlaybackQueueItem>, startIndex: Int, source: PlaybackSource? ->
+            playbackController.playQueue(items, startIndex, source)
         }
 
         val onHomeItemTapped: (HomeCarouselItem) -> Unit = { tappedItem: HomeCarouselItem ->
@@ -172,7 +174,7 @@ private fun ThumpApp() {
                             album = null,
                             coverArtUrl = tappedCoverArtUrl,
                         )
-                        playbackController.playQueue(listOf(singleItem), 0)
+                        playbackController.playQueue(listOf(singleItem), 0, null)
                     }
                     HomeItemKind.Album -> {
                         navController.navigate(buildAlbumRoute(tappedItem.id))
