@@ -46,16 +46,25 @@ class ThumpPlaybackService : MediaLibraryService() {
     private var currentScrobbleTrackId: String? = null
     private var hasSubmittedCurrent: Boolean = false
 
+    private var prefetcher: AudioPrefetcher? = null
+
     override fun onCreate() {
         super.onCreate()
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
+        val cacheFactory = AudioCacheFactory(applicationContext)
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setMediaSourceFactory(cacheFactory.buildMediaSourceFactory())
             .build()
+
+        prefetcher = AudioPrefetcher(
+            cacheDataSourceFactory = cacheFactory.buildCacheDataSourceFactory(),
+            scope = serviceCoroutineScope,
+        )
 
         player.addListener(buildPlayerListener(player))
 
@@ -67,6 +76,9 @@ class ThumpPlaybackService : MediaLibraryService() {
         librarySession = MediaLibrarySession.Builder(this, player, callback).build()
 
         restorePersistedStateInto(player)
+        // After restore the player carries the resumed queue; kick off lookahead so the user's
+        // next-track when they resume is already on disk.
+        triggerPrefetch(player)
         startPositionPersistenceLoop(player)
     }
 
@@ -75,6 +87,11 @@ class ThumpPlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        val activePrefetcher = prefetcher
+        if (activePrefetcher != null) {
+            activePrefetcher.cancelInFlight()
+            prefetcher = null
+        }
         val sessionSnapshot = librarySession
         if (sessionSnapshot != null) {
             // Final position write so the next launch starts where this session ended.
@@ -97,8 +114,37 @@ class ThumpPlaybackService : MediaLibraryService() {
                     fireScrobbleNowPlaying(trackId)
                 }
                 persistCurrentPlayerState(player)
+                triggerPrefetch(player)
             }
         }
+    }
+
+    /**
+     * Collect the post-current stream URLs from the player on the main thread and hand them to
+     * the prefetcher, which downloads them on IO. Called from onCreate (after restore) and from
+     * the Player.Listener (both already on main).
+     */
+    private fun triggerPrefetch(player: Player) {
+        val itemCount = player.mediaItemCount
+        if (itemCount <= 0) {
+            return
+        }
+        val streamUrls = ArrayList<String>(itemCount)
+        for (itemIndex in 0 until itemCount) {
+            val mediaItemAtIndex = player.getMediaItemAt(itemIndex)
+            val localConfig = mediaItemAtIndex.localConfiguration
+            if (localConfig == null) {
+                streamUrls.add("")
+            } else {
+                streamUrls.add(localConfig.uri.toString())
+            }
+        }
+        val currentIndex = player.currentMediaItemIndex
+        val activePrefetcher = prefetcher
+        if (activePrefetcher == null) {
+            return
+        }
+        activePrefetcher.startPrefetch(streamUrls, currentIndex)
     }
 
     private fun restorePersistedStateInto(player: Player) {
