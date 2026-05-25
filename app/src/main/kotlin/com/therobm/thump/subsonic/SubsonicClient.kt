@@ -2,6 +2,7 @@ package com.therobm.thump.subsonic
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -83,6 +84,116 @@ class SubsonicClient(
     }
 
     /**
+     * Calls /rest/getAlbumList2 and returns the list of album summaries.
+     *
+     * The `type` parameter is one of the standard Subsonic values: "newest", "recent",
+     * "frequent", "alphabeticalByName", and so on. `size` caps the result count (Subsonic
+     * default is 10, max 500).
+     */
+    suspend fun getAlbumList2(type: String, size: Int): SubsonicResult<List<StandardAlbumSummary>> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getAlbumList2",
+            extraQueryParameters = mapOf("type" to type, "size" to size.toString()),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.albumList2
+            if (payload == null) {
+                emptyList<StandardAlbumSummary>()
+            } else {
+                payload.album
+            }
+        }
+    }
+
+    /**
+     * Calls /rest/getPlaylists and returns the playlist summaries for the authenticated user.
+     */
+    suspend fun getPlaylists(): SubsonicResult<List<StandardPlaylistSummary>> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getPlaylists",
+            extraQueryParameters = emptyMap(),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.playlists
+            if (payload == null) {
+                emptyList<StandardPlaylistSummary>()
+            } else {
+                payload.playlist
+            }
+        }
+    }
+
+    /**
+     * Calls /rest/getStarred2 and returns the user's starred songs, albums, and artists.
+     */
+    suspend fun getStarred2(): SubsonicResult<StandardStarred2Payload> {
+        return callAndDecodeEnvelope(
+            pathAfterBase = "rest/getStarred2",
+            extraQueryParameters = emptyMap(),
+        ) { envelope: SubsonicResponseEnvelope ->
+            val payload = envelope.starred2
+            if (payload == null) {
+                StandardStarred2Payload()
+            } else {
+                payload
+            }
+        }
+    }
+
+    /**
+     * Calls the optional Pulse pulse/recentlyPlayed endpoint. Only valid when the server has
+     * already been detected as a Pulse server via probePulseExtensions().
+     */
+    suspend fun getPulseRecentlyPlayed(count: Int): SubsonicResult<List<PulseRecentlyPlayedTrack>> {
+        return callAndDecodeRaw(
+            pathAfterBase = "pulse/recentlyPlayed",
+            extraQueryParameters = mapOf("count" to count.toString()),
+            payloadDeserializer = PulseRecentlyPlayedResponse.serializer(),
+        ) { response: PulseRecentlyPlayedResponse ->
+            response.tracks
+        }
+    }
+
+    /**
+     * Calls the optional Pulse pulse/popularArtists endpoint. Only valid when the server has
+     * already been detected as a Pulse server.
+     */
+    suspend fun getPulsePopularArtists(count: Int): SubsonicResult<List<PulsePopularArtist>> {
+        return callAndDecodeRaw(
+            pathAfterBase = "pulse/popularArtists",
+            extraQueryParameters = mapOf("count" to count.toString()),
+            payloadDeserializer = PulsePopularArtistsResponse.serializer(),
+        ) { response: PulsePopularArtistsResponse ->
+            response.artists
+        }
+    }
+
+    /**
+     * Calls the optional Pulse pulse/topPlaylists endpoint. Only valid when the server has
+     * already been detected as a Pulse server.
+     */
+    suspend fun getPulseTopPlaylists(count: Int): SubsonicResult<List<PulseTopPlaylist>> {
+        return callAndDecodeRaw(
+            pathAfterBase = "pulse/topPlaylists",
+            extraQueryParameters = mapOf("count" to count.toString()),
+            payloadDeserializer = PulseTopPlaylistsResponse.serializer(),
+        ) { response: PulseTopPlaylistsResponse ->
+            response.playlists
+        }
+    }
+
+    /**
+     * Build the authenticated URL for a /rest/getCoverArt request.
+     *
+     * Returned as a plain string so an image loader (Coil) can fetch it directly. The size hint
+     * lets the server scale the art rather than always sending originals.
+     */
+    fun buildCoverArtUrl(coverArtId: String, size: Int): String {
+        return buildAuthenticatedUrl(
+            pathAfterBase = "rest/getCoverArt",
+            extraQueryParameters = mapOf("id" to coverArtId, "size" to size.toString()),
+        )
+    }
+
+    /**
      * Run a Subsonic call that only needs the standard response envelope to produce its result.
      *
      * For endpoints that carry an endpoint-specific payload, write a dedicated method that
@@ -131,6 +242,61 @@ class SubsonicClient(
         }
 
         return SubsonicResult.Ok(buildResult(envelope))
+    }
+
+    /**
+     * Run a Subsonic call whose response is raw JSON without the subsonic-response wrapper.
+     *
+     * The Pulse extension endpoints return their payload as the top-level JSON object directly,
+     * so the standard envelope helper cannot decode them. Status is inferred from the HTTP code:
+     * a non-200 response becomes a ServerError without trying to parse the body.
+     */
+    private suspend fun <P, T> callAndDecodeRaw(
+        pathAfterBase: String,
+        extraQueryParameters: Map<String, String>,
+        payloadDeserializer: KSerializer<P>,
+        buildResult: (P) -> T,
+    ): SubsonicResult<T> {
+        val request: Request
+        try {
+            val requestUrl: String = buildAuthenticatedUrl(pathAfterBase, extraQueryParameters)
+            request = Request.Builder().url(requestUrl).get().build()
+        } catch (urlBuildFailure: Exception) {
+            return SubsonicResult.TransportError(urlBuildFailure)
+        }
+
+        val responseBodyText: String
+        val httpStatusCode: Int
+        try {
+            val pair: Pair<Int, String> = withContext(Dispatchers.IO) {
+                okHttpClient.newCall(request).execute().use { response ->
+                    val body = response.body
+                    val bodyText: String
+                    if (body == null) {
+                        bodyText = ""
+                    } else {
+                        bodyText = body.string()
+                    }
+                    Pair(response.code, bodyText)
+                }
+            }
+            httpStatusCode = pair.first
+            responseBodyText = pair.second
+        } catch (transportFailure: Exception) {
+            return SubsonicResult.TransportError(transportFailure)
+        }
+
+        if (httpStatusCode != 200) {
+            return SubsonicResult.ServerError(httpStatusCode, "Unexpected HTTP status from $pathAfterBase")
+        }
+
+        val payload: P = try {
+            jsonDecoder.decodeFromString(payloadDeserializer, responseBodyText)
+        } catch (decodeFailure: Exception) {
+            return SubsonicResult.MalformedResponse(decodeFailure)
+        }
+
+        return SubsonicResult.Ok(buildResult(payload))
     }
 
     /**
