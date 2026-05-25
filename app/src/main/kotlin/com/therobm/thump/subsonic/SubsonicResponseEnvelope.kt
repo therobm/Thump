@@ -17,11 +17,12 @@ data class SubsonicResponseRoot(
 )
 
 /**
- * The common fields present on every Subsonic response, regardless of which endpoint was called.
+ * The common fields present on every Subsonic response plus the optional payload fields used
+ * by the endpoints the client currently calls.
  *
- * Endpoint-specific payloads are decoded separately by reading the same JSON a second time into
- * the relevant payload class. Mixing them into this envelope would require a discriminator the
- * wire protocol does not have.
+ * Each endpoint populates one of the payload fields and leaves the rest null. They all live on
+ * the same envelope so a single decode pass handles every standard endpoint that wraps its
+ * payload in subsonic-response.
  */
 @Serializable
 data class SubsonicResponseEnvelope(
@@ -31,6 +32,9 @@ data class SubsonicResponseEnvelope(
     val serverVersion: String? = null,
     val openSubsonic: Boolean? = null,
     val error: SubsonicErrorPayload? = null,
+    val albumList2: StandardAlbumList2Payload? = null,
+    val playlists: StandardPlaylistsPayload? = null,
+    val starred2: StandardStarred2Payload? = null,
 )
 
 @Serializable
