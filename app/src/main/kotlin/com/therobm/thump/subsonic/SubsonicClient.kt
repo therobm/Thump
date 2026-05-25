@@ -181,6 +181,20 @@ class SubsonicClient(
     }
 
     /**
+     * Build the authenticated URL for a /rest/stream request.
+     *
+     * Returned as a plain string so an audio player (Media3 ExoPlayer) can fetch it directly.
+     * The server picks the format and bitrate based on its own defaults; future revisions may
+     * add maxBitRate or format hints once the Settings screen exposes them.
+     */
+    fun buildStreamUrl(trackId: String): String {
+        return buildAuthenticatedUrl(
+            pathAfterBase = "rest/stream",
+            extraQueryParameters = mapOf("id" to trackId),
+        )
+    }
+
+    /**
      * Build the authenticated URL for a /rest/getCoverArt request.
      *
      * Returned as a plain string so an image loader (Coil) can fetch it directly. The size hint
