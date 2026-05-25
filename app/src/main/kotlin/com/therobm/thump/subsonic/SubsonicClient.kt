@@ -3,6 +3,7 @@ package com.therobm.thump.subsonic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,7 +32,7 @@ class SubsonicClient(
      * protocol version and server brand the server reports.
      */
     suspend fun ping(): SubsonicResult<SubsonicPingResult> {
-        return callAndDecodeEnvelope("ping") { envelope: SubsonicResponseEnvelope ->
+        return callAndDecodeEnvelope("rest/ping", emptyMap()) { envelope: SubsonicResponseEnvelope ->
             SubsonicPingResult(
                 protocolVersion = envelope.version,
                 serverType = envelope.type,
@@ -42,18 +43,59 @@ class SubsonicClient(
     }
 
     /**
+     * Calls /rest/pulse/recentlyPlayed?count=1 and turns the HTTP status into a boolean.
+     *
+     * Per the Pulse extension spec, HTTP 200 means the server implements the Pulse home-screen
+     * endpoints and HTTP 404 means it is a standard OpenSubsonic server with no Pulse layer. Any
+     * other status is reported as a server error so callers can decide whether to retry or treat
+     * the server as standard.
+     */
+    suspend fun probePulseExtensions(): SubsonicResult<Boolean> {
+        val request: Request
+        try {
+            val requestUrl: String = buildAuthenticatedUrl(
+                pathAfterBase = "rest/pulse/recentlyPlayed",
+                extraQueryParameters = mapOf("count" to "1"),
+            )
+            request = Request.Builder().url(requestUrl).get().build()
+        } catch (urlBuildFailure: Exception) {
+            return SubsonicResult.TransportError(urlBuildFailure)
+        }
+
+        val httpStatusCode: Int
+        try {
+            httpStatusCode = withContext(Dispatchers.IO) {
+                okHttpClient.newCall(request).execute().use { response ->
+                    response.code
+                }
+            }
+        } catch (transportFailure: Exception) {
+            return SubsonicResult.TransportError(transportFailure)
+        }
+
+        if (httpStatusCode == 200) {
+            return SubsonicResult.Ok(true)
+        }
+        if (httpStatusCode == 404) {
+            return SubsonicResult.Ok(false)
+        }
+        return SubsonicResult.ServerError(httpStatusCode, "Unexpected HTTP status from Pulse probe")
+    }
+
+    /**
      * Run a Subsonic call that only needs the standard response envelope to produce its result.
      *
      * For endpoints that carry an endpoint-specific payload, write a dedicated method that
      * decodes the payload separately rather than extending this helper.
      */
     private suspend fun <T> callAndDecodeEnvelope(
-        endpointMethodName: String,
+        pathAfterBase: String,
+        extraQueryParameters: Map<String, String>,
         buildResult: (SubsonicResponseEnvelope) -> T,
     ): SubsonicResult<T> {
         val request: Request
         try {
-            val requestUrl: String = buildEndpointUrl(endpointMethodName)
+            val requestUrl: String = buildAuthenticatedUrl(pathAfterBase, extraQueryParameters)
             request = Request.Builder().url(requestUrl).get().build()
         } catch (urlBuildFailure: Exception) {
             return SubsonicResult.TransportError(urlBuildFailure)
@@ -91,7 +133,18 @@ class SubsonicClient(
         return SubsonicResult.Ok(buildResult(envelope))
     }
 
-    private fun buildEndpointUrl(endpointMethodName: String): String {
+    /**
+     * Build the fully-qualified URL for a Subsonic endpoint with auth and standard params attached.
+     *
+     * Callers supply the path after the server origin (for example "rest/ping" or
+     * "rest/pulse/recentlyPlayed") and any endpoint-specific query parameters; this method adds
+     * the username, protocol version, client identifier, response format, and the chosen auth
+     * params (token+salt or legacy hex-encoded password).
+     */
+    private fun buildAuthenticatedUrl(
+        pathAfterBase: String,
+        extraQueryParameters: Map<String, String>,
+    ): String {
         val trimmed = credentials.serverUrl.trimEnd('/')
         // If the user omitted a scheme, default to http. https takes precedence when explicitly
         // provided; this default only kicks in for LAN servers typed as bare host[:port].
@@ -102,12 +155,16 @@ class SubsonicClient(
         } else {
             base = "http://" + trimmed
         }
-        val builder = "$base/rest/$endpointMethodName".toHttpUrl().newBuilder()
+        val builder: HttpUrl.Builder = "$base/$pathAfterBase".toHttpUrl().newBuilder()
 
         builder.addQueryParameter("u", credentials.username)
         builder.addQueryParameter("v", PROTOCOL_VERSION)
         builder.addQueryParameter("c", CLIENT_NAME)
         builder.addQueryParameter("f", "json")
+
+        for (extraEntry in extraQueryParameters.entries) {
+            builder.addQueryParameter(extraEntry.key, extraEntry.value)
+        }
 
         when (authMode) {
             is SubsonicAuthMode.Token -> {
