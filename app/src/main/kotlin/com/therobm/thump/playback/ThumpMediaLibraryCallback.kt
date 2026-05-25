@@ -37,6 +37,16 @@ private const val RECENTS_FALLBACK_ALBUM_COUNT: Int = 15
 private const val PLAYLISTS_FETCH_LIMIT: Int = 500
 private const val COVER_ART_REQUEST_SIZE_PX: Int = 400
 
+// Android Auto content-style hints. Attached to every browseable item's MediaMetadata extras so
+// Auto knows how to render that item's children. We use grid for everything browseable
+// (playlists / albums / artists / shelves) and list for playable children (tracks inside an
+// album or playlist). Constants intentionally inlined as Strings/Ints — the canonical Media3
+// names are not stable across versions.
+private const val CONTENT_STYLE_BROWSABLE_HINT_KEY: String = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT"
+private const val CONTENT_STYLE_PLAYABLE_HINT_KEY: String = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT"
+private const val CONTENT_STYLE_LIST_ITEM: Int = 1
+private const val CONTENT_STYLE_GRID_ITEM: Int = 2
+
 /**
  * Browse-tree callback for the MediaLibrarySession used by Android Auto and any other
  * MediaBrowser client. All async work is bridged from suspend code via kotlinx-coroutines-guava.
@@ -576,11 +586,15 @@ class ThumpMediaLibraryCallback(
         subtitle: String?,
         artUri: String?,
     ): MediaItem {
+        val contentStyleExtras = android.os.Bundle()
+        contentStyleExtras.putInt(CONTENT_STYLE_BROWSABLE_HINT_KEY, CONTENT_STYLE_GRID_ITEM)
+        contentStyleExtras.putInt(CONTENT_STYLE_PLAYABLE_HINT_KEY, CONTENT_STYLE_LIST_ITEM)
         val metadataBuilder = MediaMetadata.Builder()
             .setTitle(title)
             .setIsBrowsable(true)
             .setIsPlayable(false)
             .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+            .setExtras(contentStyleExtras)
         if (subtitle != null) {
             metadataBuilder.setSubtitle(subtitle)
         }
