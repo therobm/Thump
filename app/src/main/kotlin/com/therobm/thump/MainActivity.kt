@@ -228,6 +228,7 @@ private fun ThumpApp() {
                             isPulseServer = isPulseServer,
                             contentPadding = innerPadding,
                             onItemTapped = onHomeItemTapped,
+                            onPlayQueue = onPlayQueue,
                             modifier = Modifier,
                         )
                     }
