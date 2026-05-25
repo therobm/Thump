@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
 import com.therobm.thump.art.CompositeArtTile
+import com.therobm.thump.playback.PlaybackQueueItem
+import com.therobm.thump.playback.PlaybackSource
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicResult
 import kotlinx.coroutines.launch
@@ -51,6 +53,7 @@ fun HomeScreen(
     isPulseServer: Boolean,
     contentPadding: PaddingValues,
     onItemTapped: (HomeCarouselItem) -> Unit,
+    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
     modifier: Modifier,
 ) {
     val repository = remember(subsonicClient, isPulseServer) {
@@ -83,6 +86,23 @@ fun HomeScreen(
     ) {
         item {
             Spacer(modifier = Modifier.height(4.dp))
+        }
+        item {
+            QuickPlaylistsGrid(
+                subsonicClient = subsonicClient,
+                onPlaylistSelected = { playlistId: String, playlistName: String ->
+                    onItemTapped(
+                        HomeCarouselItem(
+                            id = playlistId,
+                            kind = HomeItemKind.Playlist,
+                            title = playlistName,
+                            subtitle = "",
+                            coverArtId = null,
+                        )
+                    )
+                },
+                onPlayQueue = onPlayQueue,
+            )
         }
         items(items = sections, key = { section -> section.key.name }) { section ->
             HomeSectionView(
