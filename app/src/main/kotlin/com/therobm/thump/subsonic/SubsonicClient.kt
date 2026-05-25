@@ -54,7 +54,7 @@ class SubsonicClient(
         val request: Request
         try {
             val requestUrl: String = buildAuthenticatedUrl(
-                pathAfterBase = "rest/pulse/recentlyPlayed",
+                pathAfterBase = "pulse/recentlyPlayed",
                 extraQueryParameters = mapOf("count" to "1"),
             )
             request = Request.Builder().url(requestUrl).get().build()
