@@ -165,11 +165,32 @@ class ThumpMediaLibraryCallback(
 
     private fun buildRootChildren(): ImmutableList<MediaItem> {
         val children = ImmutableList.builder<MediaItem>()
-        children.add(buildBrowseableItem(MEDIA_ID_HOME, "Home"))
+        // Home gets a custom hint set: both browseable AND playable children render as grid,
+        // so the inline Recently Played track tiles match the rest of the shelves instead of
+        // collapsing into a list. Other top-level entries keep the default playable=list so
+        // tracks inside playlists/albums still show as a list when the user drills in.
+        children.add(buildHomeShelfItem())
         children.add(buildBrowseableItem(MEDIA_ID_RECENTS, "Recents"))
         children.add(buildBrowseableItem(MEDIA_ID_PLAYLISTS, "Playlists"))
         children.add(buildBrowseableItem(MEDIA_ID_ARTISTS, "Artists"))
         return children.build()
+    }
+
+    private fun buildHomeShelfItem(): MediaItem {
+        val extras = android.os.Bundle()
+        extras.putInt(CONTENT_STYLE_BROWSABLE_HINT_KEY, CONTENT_STYLE_GRID_ITEM)
+        extras.putInt(CONTENT_STYLE_PLAYABLE_HINT_KEY, CONTENT_STYLE_GRID_ITEM)
+        val metadata = MediaMetadata.Builder()
+            .setTitle("Home")
+            .setIsBrowsable(true)
+            .setIsPlayable(false)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+            .setExtras(extras)
+            .build()
+        return MediaItem.Builder()
+            .setMediaId(MEDIA_ID_HOME)
+            .setMediaMetadata(metadata)
+            .build()
     }
 
     /**
@@ -196,11 +217,11 @@ class ThumpMediaLibraryCallback(
         }
 
         val sections: List<List<MediaItem>> = coroutineScope {
-            val recentlyPlayedDeferred = async {
-                fetchRecentlyPlayedSection(subsonicClient, isPulse, "Recently Played")
-            }
             val playlistsDeferred = async {
                 fetchPlaylistsSection(subsonicClient, isPulse, playlistsTitle)
+            }
+            val recentlyPlayedDeferred = async {
+                fetchRecentlyPlayedSection(subsonicClient, isPulse, "Recently Played")
             }
             val popularOrFrequentDeferred = async {
                 fetchPopularOrFrequentSection(subsonicClient, isPulse, popularOrFrequentTitle)
@@ -212,8 +233,8 @@ class ThumpMediaLibraryCallback(
                 fetchFavoritesSection(subsonicClient, "Favorites")
             }
             listOf(
-                recentlyPlayedDeferred.await(),
                 playlistsDeferred.await(),
+                recentlyPlayedDeferred.await(),
                 popularOrFrequentDeferred.await(),
                 recentlyAddedDeferred.await(),
                 favoritesDeferred.await(),
