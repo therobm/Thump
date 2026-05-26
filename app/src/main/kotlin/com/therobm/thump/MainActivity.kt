@@ -46,6 +46,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.therobm.thump.data.ThumpData
+import com.therobm.thump.data.Track
 import com.therobm.thump.detail.AlbumDetailScreen
 import com.therobm.thump.detail.ArtistDetailScreen
 import com.therobm.thump.detail.GenreDetailScreen
@@ -315,14 +316,38 @@ private fun ThumpApp() {
                         ConfigurePrompt(innerPadding)
                     } else {
                         SearchScreen(
-                            subsonicClient = subsonicClient,
+                            thumpData = thumpData,
                             onArtistSelected = { artistId: String ->
                                 navController.navigate(buildArtistRoute(artistId))
                             },
                             onAlbumSelected = { albumId: String ->
                                 navController.navigate(buildAlbumRoute(albumId))
                             },
-                            onPlayQueue = onPlayQueue,
+                            onTrackSelected = { tappedTrack: Track ->
+                                val tappedCoverArtUrl: String?
+                                val tappedCoverArtId: String? = tappedTrack.coverArtId
+                                if (tappedCoverArtId == null) {
+                                    tappedCoverArtUrl = null
+                                } else {
+                                    tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
+                                }
+                                val tappedArtistText: String
+                                val tappedArtistName: String? = tappedTrack.artistName
+                                if (tappedArtistName == null) {
+                                    tappedArtistText = ""
+                                } else {
+                                    tappedArtistText = tappedArtistName
+                                }
+                                val singleItem: PlaybackQueueItem = PlaybackQueueItem(
+                                    trackId = tappedTrack.trackId,
+                                    streamUrl = subsonicClient.buildStreamUrl(tappedTrack.trackId),
+                                    title = tappedTrack.title,
+                                    artist = tappedArtistText,
+                                    album = tappedTrack.albumName,
+                                    coverArtUrl = tappedCoverArtUrl,
+                                )
+                                onPlayQueue(listOf(singleItem), 0, null)
+                            },
                             contentPadding = innerPadding,
                             modifier = Modifier,
                         )

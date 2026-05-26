@@ -32,65 +32,60 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
-import com.therobm.thump.playback.PlaybackQueueItem
-import com.therobm.thump.playback.PlaybackSource
-import com.therobm.thump.subsonic.StandardAlbumSummary
-import com.therobm.thump.subsonic.StandardLibraryArtist
-import com.therobm.thump.subsonic.StandardSearchResult3Payload
-import com.therobm.thump.subsonic.StandardSongDetail
-import com.therobm.thump.subsonic.SubsonicClient
-import com.therobm.thump.subsonic.SubsonicResult
+import com.therobm.thump.art.ArtImage
+import com.therobm.thump.data.Album
+import com.therobm.thump.data.Artist
+import com.therobm.thump.data.SearchResult
+import com.therobm.thump.data.ThumpData
+import com.therobm.thump.data.ThumpDataNotConfigured
+import com.therobm.thump.data.Track
 import kotlinx.coroutines.delay
+import java.io.IOException
 
 private const val DEBOUNCE_MS: Long = 300L
-private const val RESULTS_PER_CATEGORY: Int = 20
 private const val ROW_THUMB_SIZE_DP: Int = 56
 private const val ROW_ART_REQUEST_SIZE_PX: Int = 150
+private const val NO_SERVER_CONFIGURED_MESSAGE: String = "No server configured"
 
 /**
  * Real Search tab. Single text input at the top; below it, three sections (Artists / Albums /
- * Songs) populated by /rest/search3. Input is debounced 300ms so we don't fire a request on
+ * Songs) populated by `thumpData.search`. Input is debounced 300ms so we don't fire a request on
  * every keystroke.
  *
  * Empty query renders the placeholder prompt. Tapping a row opens the matching detail screen,
- * except for songs which play immediately as a single-track queue.
+ * except for songs which play immediately as a single-track queue. SearchScreen reports the
+ * tapped track via `onTrackSelected` and lets MainActivity assemble the PlaybackQueueItem so
+ * this screen stays free of stream-URL and cover-art-URL construction.
  */
 @Composable
 fun SearchScreen(
-    subsonicClient: SubsonicClient,
+    thumpData: ThumpData,
     onArtistSelected: (String) -> Unit,
     onAlbumSelected: (String) -> Unit,
-    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
+    onTrackSelected: (Track) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var loadState: SearchLoadState by remember(subsonicClient) {
-        mutableStateOf(SearchLoadState.Empty)
+    var query: String by rememberSaveable { mutableStateOf("") }
+    var loadState: SearchLoadState by remember(thumpData) {
+        mutableStateOf<SearchLoadState>(SearchLoadState.Empty)
     }
 
-    LaunchedEffect(query, subsonicClient) {
+    LaunchedEffect(query, thumpData) {
         if (query.isBlank()) {
             loadState = SearchLoadState.Empty
             return@LaunchedEffect
         }
         delay(DEBOUNCE_MS)
         loadState = SearchLoadState.Loading
-        val result = subsonicClient.search3(
-            query = query.trim(),
-            artistCount = RESULTS_PER_CATEGORY,
-            albumCount = RESULTS_PER_CATEGORY,
-            songCount = RESULTS_PER_CATEGORY,
-        )
-        loadState = when (result) {
-            is SubsonicResult.Ok -> {
-                SearchLoadState.Loaded(result.value)
-            }
-            else -> {
-                SearchLoadState.Failed(describeFailure(result))
-            }
+        try {
+            val result: SearchResult = thumpData.search(query.trim())
+            loadState = SearchLoadState.Loaded(result)
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            loadState = SearchLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE)
+        } catch (transportFailure: IOException) {
+            loadState = SearchLoadState.Failed("Network error: " + transportFailure.javaClass.simpleName)
         }
     }
 
@@ -118,7 +113,7 @@ fun SearchScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
 
-        val currentLoadState = loadState
+        val currentLoadState: SearchLoadState = loadState
         when (currentLoadState) {
             is SearchLoadState.Empty -> {
                 CenteredHint(message = "Start typing to search your library.")
@@ -135,16 +130,16 @@ fun SearchScreen(
                 CenteredHint(message = currentLoadState.message)
             }
             is SearchLoadState.Loaded -> {
-                val payload = currentLoadState.value
-                if (payload.artist.isEmpty() && payload.album.isEmpty() && payload.song.isEmpty()) {
+                val payload: SearchResult = currentLoadState.value
+                if (payload.artists.isEmpty() && payload.albums.isEmpty() && payload.tracks.isEmpty()) {
                     CenteredHint(message = "No matches.")
                 } else {
                     SearchResultsList(
                         payload = payload,
-                        subsonicClient = subsonicClient,
+                        thumpData = thumpData,
                         onArtistSelected = onArtistSelected,
                         onAlbumSelected = onAlbumSelected,
-                        onPlayQueue = onPlayQueue,
+                        onTrackSelected = onTrackSelected,
                     )
                 }
             }
@@ -154,49 +149,46 @@ fun SearchScreen(
 
 @Composable
 private fun SearchResultsList(
-    payload: StandardSearchResult3Payload,
-    subsonicClient: SubsonicClient,
+    payload: SearchResult,
+    thumpData: ThumpData,
     onArtistSelected: (String) -> Unit,
     onAlbumSelected: (String) -> Unit,
-    onPlayQueue: (List<PlaybackQueueItem>, Int, PlaybackSource?) -> Unit,
+    onTrackSelected: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        if (payload.artist.isNotEmpty()) {
+        if (payload.artists.isNotEmpty()) {
             item(key = "header-artists") {
                 SectionHeader(title = "Artists")
             }
-            items(items = payload.artist, key = { artist -> "artist:" + artist.id }) { artist ->
+            items(items = payload.artists, key = { artist: Artist -> "artist:" + artist.artistId }) { artist: Artist ->
                 SearchArtistRow(
                     artist = artist,
-                    subsonicClient = subsonicClient,
-                    onTapped = { onArtistSelected(artist.id) },
+                    thumpData = thumpData,
+                    onTapped = { onArtistSelected(artist.artistId) },
                 )
             }
         }
-        if (payload.album.isNotEmpty()) {
+        if (payload.albums.isNotEmpty()) {
             item(key = "header-albums") {
                 SectionHeader(title = "Albums")
             }
-            items(items = payload.album, key = { album -> "album:" + album.id }) { album ->
+            items(items = payload.albums, key = { album: Album -> "album:" + album.albumId }) { album: Album ->
                 SearchAlbumRow(
                     album = album,
-                    subsonicClient = subsonicClient,
-                    onTapped = { onAlbumSelected(album.id) },
+                    thumpData = thumpData,
+                    onTapped = { onAlbumSelected(album.albumId) },
                 )
             }
         }
-        if (payload.song.isNotEmpty()) {
+        if (payload.tracks.isNotEmpty()) {
             item(key = "header-songs") {
                 SectionHeader(title = "Songs")
             }
-            items(items = payload.song, key = { song -> "song:" + song.id }) { song ->
-                SearchSongRow(
-                    song = song,
-                    subsonicClient = subsonicClient,
-                    onTapped = {
-                        val queueItem = buildQueueItemForSong(song, subsonicClient)
-                        onPlayQueue(listOf(queueItem), 0, null)
-                    },
+            items(items = payload.tracks, key = { track: Track -> "track:" + track.trackId }) { track: Track ->
+                SearchTrackRow(
+                    track = track,
+                    thumpData = thumpData,
+                    onTapped = { onTrackSelected(track) },
                 )
             }
         }
@@ -215,17 +207,10 @@ private fun SectionHeader(title: String) {
 
 @Composable
 private fun SearchArtistRow(
-    artist: StandardLibraryArtist,
-    subsonicClient: SubsonicClient,
+    artist: Artist,
+    thumpData: ThumpData,
     onTapped: () -> Unit,
 ) {
-    val coverArtId = artist.coverArt
-    val coverArtUrl: String?
-    if (coverArtId == null) {
-        coverArtUrl = null
-    } else {
-        coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, ROW_ART_REQUEST_SIZE_PX)
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -234,19 +219,16 @@ private fun SearchArtistRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val thumbModifier = Modifier
+        val thumbModifier: Modifier = Modifier
             .size(ROW_THUMB_SIZE_DP.dp)
             .clip(CircleShape)
-            .background(ThumpColors.Surface)
-        if (coverArtUrl == null) {
-            Box(modifier = thumbModifier)
-        } else {
-            AsyncImage(
-                model = coverArtUrl,
-                contentDescription = null,
-                modifier = thumbModifier,
-            )
-        }
+        ArtImage(
+            thumpData = thumpData,
+            artId = artist.coverArtId,
+            sizePx = ROW_ART_REQUEST_SIZE_PX,
+            contentDescription = null,
+            modifier = thumbModifier,
+        )
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = artist.name,
@@ -256,7 +238,7 @@ private fun SearchArtistRow(
                 overflow = TextOverflow.Ellipsis,
             )
             val subtitle: String
-            if (artist.albumCount != null && artist.albumCount > 0) {
+            if (artist.albumCount > 0) {
                 subtitle = artist.albumCount.toString() + " albums"
             } else {
                 subtitle = ""
@@ -276,22 +258,15 @@ private fun SearchArtistRow(
 
 @Composable
 private fun SearchAlbumRow(
-    album: StandardAlbumSummary,
-    subsonicClient: SubsonicClient,
+    album: Album,
+    thumpData: ThumpData,
     onTapped: () -> Unit,
 ) {
-    val coverArtId = album.coverArt
-    val coverArtUrl: String?
-    if (coverArtId == null) {
-        coverArtUrl = null
-    } else {
-        coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, ROW_ART_REQUEST_SIZE_PX)
-    }
     val artistText: String
-    if (album.artist == null) {
+    if (album.artistName == null) {
         artistText = ""
     } else {
-        artistText = album.artist
+        artistText = album.artistName
     }
     Row(
         modifier = Modifier
@@ -301,19 +276,16 @@ private fun SearchAlbumRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val thumbModifier = Modifier
+        val thumbModifier: Modifier = Modifier
             .size(ROW_THUMB_SIZE_DP.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(ThumpColors.Surface)
-        if (coverArtUrl == null) {
-            Box(modifier = thumbModifier)
-        } else {
-            AsyncImage(
-                model = coverArtUrl,
-                contentDescription = null,
-                modifier = thumbModifier,
-            )
-        }
+        ArtImage(
+            thumpData = thumpData,
+            artId = album.coverArtId,
+            sizePx = ROW_ART_REQUEST_SIZE_PX,
+            contentDescription = null,
+            modifier = thumbModifier,
+        )
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = album.name,
@@ -336,23 +308,16 @@ private fun SearchAlbumRow(
 }
 
 @Composable
-private fun SearchSongRow(
-    song: StandardSongDetail,
-    subsonicClient: SubsonicClient,
+private fun SearchTrackRow(
+    track: Track,
+    thumpData: ThumpData,
     onTapped: () -> Unit,
 ) {
-    val coverArtId = song.coverArt
-    val coverArtUrl: String?
-    if (coverArtId == null) {
-        coverArtUrl = null
-    } else {
-        coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, ROW_ART_REQUEST_SIZE_PX)
-    }
     val artistText: String
-    if (song.artist == null) {
+    if (track.artistName == null) {
         artistText = ""
     } else {
-        artistText = song.artist
+        artistText = track.artistName
     }
     Row(
         modifier = Modifier
@@ -362,22 +327,19 @@ private fun SearchSongRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val thumbModifier = Modifier
+        val thumbModifier: Modifier = Modifier
             .size(ROW_THUMB_SIZE_DP.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(ThumpColors.Surface)
-        if (coverArtUrl == null) {
-            Box(modifier = thumbModifier)
-        } else {
-            AsyncImage(
-                model = coverArtUrl,
-                contentDescription = null,
-                modifier = thumbModifier,
-            )
-        }
+        ArtImage(
+            thumpData = thumpData,
+            artId = track.coverArtId,
+            sizePx = ROW_ART_REQUEST_SIZE_PX,
+            contentDescription = null,
+            modifier = thumbModifier,
+        )
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = song.title,
+                text = track.title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = ThumpColors.OnBackground,
                 maxLines = 1,
@@ -408,54 +370,9 @@ private fun CenteredHint(message: String) {
     }
 }
 
-private fun buildQueueItemForSong(
-    song: StandardSongDetail,
-    subsonicClient: SubsonicClient,
-): PlaybackQueueItem {
-    val coverArtUrl: String?
-    val coverArtId = song.coverArt
-    if (coverArtId == null) {
-        coverArtUrl = null
-    } else {
-        coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, ROW_ART_REQUEST_SIZE_PX)
-    }
-    val artistText: String
-    if (song.artist == null) {
-        artistText = ""
-    } else {
-        artistText = song.artist
-    }
-    return PlaybackQueueItem(
-        trackId = song.id,
-        streamUrl = subsonicClient.buildStreamUrl(song.id),
-        title = song.title,
-        artist = artistText,
-        album = song.album,
-        coverArtUrl = coverArtUrl,
-    )
-}
-
 private sealed interface SearchLoadState {
     object Empty : SearchLoadState
     object Loading : SearchLoadState
-    data class Loaded(val value: StandardSearchResult3Payload) : SearchLoadState
+    data class Loaded(val value: SearchResult) : SearchLoadState
     data class Failed(val message: String) : SearchLoadState
 }
-
-private fun describeFailure(result: SubsonicResult<*>): String {
-    when (result) {
-        is SubsonicResult.Ok -> {
-            return "Unexpected success"
-        }
-        is SubsonicResult.ServerError -> {
-            return "Server error " + result.code + ": " + result.message
-        }
-        is SubsonicResult.TransportError -> {
-            return "Network error: " + result.cause.javaClass.simpleName
-        }
-        is SubsonicResult.MalformedResponse -> {
-            return "Bad response: " + result.cause.javaClass.simpleName
-        }
-    }
-}
-
