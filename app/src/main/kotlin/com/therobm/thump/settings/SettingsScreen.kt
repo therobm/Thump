@@ -106,7 +106,7 @@ fun SettingsScreen(
         OutlinedTextField(
             value = serverUrl,
             onValueChange = { newValue: String -> serverUrl = newValue },
-            label = { Text(text = "Server URL (e.g. https://music.example.com)") },
+            label = { Text(text = "Server URL (e.g. https://music.example.com:45678)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
