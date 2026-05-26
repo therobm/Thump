@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import com.therobm.thump.data.ThumpData
 import com.therobm.thump.settings.ThumpSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,8 +53,17 @@ class ThumpPlaybackService : MediaLibraryService() {
 
     private var prefetcher: AudioPrefetcher? = null
 
+    // Service-process ThumpData. Per Projects/Thump.md, MediaLibraryService eventually runs in
+    // its own process; each process gets its own ThumpData against the shared SQLite WAL +
+    // blob directory. Until process separation is enabled in the manifest, this co-exists with
+    // the UI process's ThumpApplication.thumpData — the SQLite WAL + atomic blob renames make
+    // that safe. Nothing in step 2 routes through this reference yet; later steps (audio path,
+    // browse callbacks) move over from PlaybackCredentialsLoader / SubsonicClient.
+    private var serviceThumpData: ThumpData? = null
+
     override fun onCreate() {
         super.onCreate()
+        serviceThumpData = ThumpData(applicationContext)
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
