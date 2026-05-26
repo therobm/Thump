@@ -2,6 +2,7 @@ package com.therobm.thump.data
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.graphics.Bitmap
@@ -69,6 +70,19 @@ class ThumpData(
     private var openDataSpec: DataSpec? = null
     private var openInputStream: InputStream? = null
     private var openBytesRemaining: Long = 0L
+
+    init {
+        // Eager bind from disk-or-prefs at construction so the first caller never sees an
+        // unconfigured ThumpData. Two cases:
+        //   1. server_config has a row (a previous boot already wrote it) — bind from it.
+        //   2. row is empty but the legacy SharedPreferences-backed credentials are present
+        //      (first boot of the new code on an existing install) — copy them across and
+        //      bind. The legacy prefs are intentionally not deleted; other in-flight code
+        //      paths may still read them.
+        // If neither has credentials, activeProtocol stays null and the typed-guard path
+        // (ThumpDataNotConfigured) handles any premature caller.
+        eagerlyBindActiveProtocolFromDiskOrLegacyPreferences()
+    }
 
     // -- Server config & protocol selection ----------------------------------------------------
 
@@ -142,7 +156,7 @@ class ThumpData(
         }
         val configFromDisk: ServerConfig? = withContext(Dispatchers.IO) { readServerConfigRow() }
         if (configFromDisk == null) {
-            throw IllegalStateException("ThumpData has no server config; call setServerConfig first")
+            throw ThumpDataNotConfigured()
         }
         installProtocolWithConfig(
             serverConfig = configFromDisk,
@@ -548,13 +562,81 @@ class ThumpData(
         }
         val config: ServerConfig? = withContext(Dispatchers.IO) { readServerConfigRow() }
         if (config == null) {
-            throw IllegalStateException(
-                "ThumpData has no active IProtocol; call setServerConfig before any other operation"
-            )
+            throw ThumpDataNotConfigured()
         }
         val builtProtocol: IProtocol = buildProtocolForConfig(config)
         installProtocolWithConfig(config, builtProtocol)
         return builtProtocol
+    }
+
+    private fun eagerlyBindActiveProtocolFromDiskOrLegacyPreferences(): Unit {
+        val configFromDisk: ServerConfig? = readServerConfigRow()
+        if (configFromDisk != null) {
+            installProtocolWithoutWritingRow(
+                serverConfig = configFromDisk,
+                builtProtocol = buildProtocolForConfig(configFromDisk),
+            )
+            return
+        }
+        val migratedConfig: ServerConfig? = readLegacyCredentialsFromSharedPreferences()
+        if (migratedConfig == null) {
+            return
+        }
+        writeServerConfigRow(migratedConfig)
+        installProtocolWithoutWritingRow(
+            serverConfig = migratedConfig,
+            builtProtocol = buildProtocolForConfig(migratedConfig),
+        )
+    }
+
+    private fun readLegacyCredentialsFromSharedPreferences(): ServerConfig? {
+        val legacyPreferences: SharedPreferences = applicationContext.getSharedPreferences(
+            LEGACY_CREDENTIALS_PREFS_NAME,
+            Context.MODE_PRIVATE,
+        )
+        val storedServerUrl: String? = legacyPreferences.getString(LEGACY_PREFS_KEY_SERVER_URL, null)
+        val storedUsername: String? = legacyPreferences.getString(LEGACY_PREFS_KEY_USERNAME, null)
+        val storedPassword: String? = legacyPreferences.getString(LEGACY_PREFS_KEY_PASSWORD, null)
+        if (storedServerUrl == null) {
+            return null
+        }
+        if (storedUsername == null) {
+            return null
+        }
+        if (storedPassword == null) {
+            return null
+        }
+        if (storedServerUrl.isBlank()) {
+            return null
+        }
+        if (storedUsername.isBlank()) {
+            return null
+        }
+        if (storedPassword.isBlank()) {
+            return null
+        }
+        val storedUseTokenAuth: Boolean = legacyPreferences.getBoolean(
+            LEGACY_PREFS_KEY_USE_TOKEN_AUTH,
+            true,
+        )
+        return ServerConfig(
+            serverUrl = storedServerUrl,
+            username = storedUsername,
+            password = storedPassword,
+            useTokenAuth = storedUseTokenAuth,
+            detectedProtocol = null,
+            lastProbedAtEpochMillis = null,
+        )
+    }
+
+    private fun installProtocolWithoutWritingRow(
+        serverConfig: ServerConfig,
+        builtProtocol: IProtocol,
+    ): Unit {
+        synchronized(credentialsLock) {
+            cachedServerConfig = serverConfig
+            activeProtocol = builtProtocol
+        }
     }
 
     private fun buildProtocolForConfig(serverConfig: ServerConfig): IProtocol {
@@ -755,5 +837,17 @@ class ThumpData(
         for (keyIndex in 0 until keyCount) {
             blobStore.deleteBlob(collectedKeys[keyIndex])
         }
+    }
+
+    private companion object {
+        // The legacy SharedPreferences file MainActivity has been using to persist credentials
+        // since before the SQLite server_config table existed. ThumpData reads it once on first
+        // boot of the new code to migrate the row across; the legacy keys are not deleted
+        // because other in-flight code may still read them.
+        private const val LEGACY_CREDENTIALS_PREFS_NAME: String = "thump_settings"
+        private const val LEGACY_PREFS_KEY_SERVER_URL: String = "server_url"
+        private const val LEGACY_PREFS_KEY_USERNAME: String = "username"
+        private const val LEGACY_PREFS_KEY_PASSWORD: String = "password"
+        private const val LEGACY_PREFS_KEY_USE_TOKEN_AUTH: String = "use_token_auth"
     }
 }

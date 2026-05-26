@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import com.therobm.thump.ThumpColors
 import com.therobm.thump.data.ThumpData
+import com.therobm.thump.data.ThumpDataNotConfigured
 import java.io.IOException
 
 /**
@@ -47,6 +48,11 @@ fun ArtImage(
             val loaded: Bitmap = thumpData.getCoverArt(artId, sizePx)
             bitmapState.value = loaded
         } catch (loadFailure: IOException) {
+            bitmapState.value = null
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            // First-boot race against MainActivity's setServerConfig LaunchedEffect; the
+            // placeholder stays visible and recomposition picks up the bitmap once the bind
+            // arrives.
             bitmapState.value = null
         }
     }

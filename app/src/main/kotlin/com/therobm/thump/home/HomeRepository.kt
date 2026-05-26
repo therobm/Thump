@@ -7,6 +7,7 @@ import com.therobm.thump.data.HomeItem
 import com.therobm.thump.data.Playlist
 import com.therobm.thump.data.StarredCollection
 import com.therobm.thump.data.ThumpData
+import com.therobm.thump.data.ThumpDataNotConfigured
 import com.therobm.thump.data.Track
 import java.io.IOException
 import com.therobm.thump.data.HomeItemKind as DataHomeItemKind
@@ -44,10 +45,19 @@ class HomeRepository(
     }
 
     private suspend fun loadRecentlyPlayedSection(): HomeSection {
-        val items: List<HomeItem> = thumpData.getRecentlyPlayed(
-            limit = HOME_CAROUSEL_FETCH_LIMIT,
-            types = ALL_HOME_ITEM_KINDS,
-        )
+        val items: List<HomeItem>
+        try {
+            items = thumpData.getRecentlyPlayed(
+                limit = HOME_CAROUSEL_FETCH_LIMIT,
+                types = ALL_HOME_ITEM_KINDS,
+            )
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            return HomeSection(
+                key = HomeSectionKey.RecentlyPlayed,
+                title = "Recently Played",
+                loadState = HomeSectionLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE),
+            )
+        }
         return HomeSection(
             key = HomeSectionKey.RecentlyPlayed,
             title = "Recently Played",
@@ -56,7 +66,16 @@ class HomeRepository(
     }
 
     private suspend fun loadTopPlaylistsSection(): HomeSection {
-        val items: List<HomeItem> = thumpData.getTopPlaylists(HOME_CAROUSEL_FETCH_LIMIT)
+        val items: List<HomeItem>
+        try {
+            items = thumpData.getTopPlaylists(HOME_CAROUSEL_FETCH_LIMIT)
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            return HomeSection(
+                key = HomeSectionKey.Playlists,
+                title = "Your Playlists",
+                loadState = HomeSectionLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE),
+            )
+        }
         return HomeSection(
             key = HomeSectionKey.Playlists,
             title = "Your Playlists",
@@ -65,7 +84,16 @@ class HomeRepository(
     }
 
     private suspend fun loadPopularArtistsSection(): HomeSection {
-        val items: List<HomeItem> = thumpData.getPopularArtists(HOME_CAROUSEL_FETCH_LIMIT)
+        val items: List<HomeItem>
+        try {
+            items = thumpData.getPopularArtists(HOME_CAROUSEL_FETCH_LIMIT)
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            return HomeSection(
+                key = HomeSectionKey.PopularOrFrequent,
+                title = "Popular Artists",
+                loadState = HomeSectionLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE),
+            )
+        }
         return HomeSection(
             key = HomeSectionKey.PopularOrFrequent,
             title = "Popular Artists",
@@ -74,11 +102,20 @@ class HomeRepository(
     }
 
     private suspend fun loadRecentlyAddedSection(): HomeSection {
-        val albums: List<Album> = thumpData.getAllAlbums(
-            sort = AlbumSort.Newest,
-            limit = HOME_CAROUSEL_FETCH_LIMIT,
-            offset = 0,
-        )
+        val albums: List<Album>
+        try {
+            albums = thumpData.getAllAlbums(
+                sort = AlbumSort.Newest,
+                limit = HOME_CAROUSEL_FETCH_LIMIT,
+                offset = 0,
+            )
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            return HomeSection(
+                key = HomeSectionKey.RecentlyAdded,
+                title = "Recently Added",
+                loadState = HomeSectionLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE),
+            )
+        }
         val mapped: ArrayList<HomeCarouselItem> = ArrayList<HomeCarouselItem>(albums.size)
         val albumCount: Int = albums.size
         for (albumIndex in 0 until albumCount) {
@@ -95,6 +132,12 @@ class HomeRepository(
         val starred: StarredCollection
         try {
             starred = thumpData.getStarred()
+        } catch (notConfigured: ThumpDataNotConfigured) {
+            return HomeSection(
+                key = HomeSectionKey.Favorites,
+                title = "Favorites",
+                loadState = HomeSectionLoadState.Failed(NO_SERVER_CONFIGURED_MESSAGE),
+            )
         } catch (loadFailure: IOException) {
             return HomeSection(
                 key = HomeSectionKey.Favorites,
@@ -207,6 +250,7 @@ class HomeRepository(
 
     companion object {
         const val HOME_CAROUSEL_FETCH_LIMIT: Int = 20
+        private const val NO_SERVER_CONFIGURED_MESSAGE: String = "No server configured"
         private val ALL_HOME_ITEM_KINDS: Set<DataHomeItemKind> = setOf<DataHomeItemKind>(
             DataHomeItemKind.Track,
             DataHomeItemKind.Artist,
