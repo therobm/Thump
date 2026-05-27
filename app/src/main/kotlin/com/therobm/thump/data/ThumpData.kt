@@ -882,6 +882,23 @@ class ThumpData(
         return totalBytesWritten
     }
 
+    /**
+     * Cheap synchronous check for whether the audio body for [trackId] is already on disk.
+     * Backed by the same `blobStore.openBlobFile` call the DataSource uses, so a `true` return
+     * here means a subsequent `DataSource.open` for the same track will not throw the
+     * "audio blob not cached" IOException. Safe to call from the main thread — the underlying
+     * lookup is a single SQLite row read plus a `File.exists()` check, both negligible at the
+     * sizes the blob index runs at.
+     *
+     * Used by the playback service's onMediaItemTransition gate to decide whether to pause and
+     * drive `prefetchAudio` before letting ExoPlayer attempt to load the new current track.
+     */
+    fun isAudioBlobCached(trackId: String): Boolean {
+        val cacheKey: String = ThumpBlobStore.trackBlobKey(trackId)
+        val cachedFile: File? = blobStore.openBlobFile(cacheKey)
+        return cachedFile != null
+    }
+
     private fun removePrefetchDeferredEntry(trackId: String, expectedDeferred: Deferred<Unit>): Unit {
         // invokeOnCompletion runs synchronously off the completing Deferred — drop the
         // coalescing entry through an async best-effort path so we do not block the completion

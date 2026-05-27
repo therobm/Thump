@@ -2,11 +2,15 @@ package com.therobm.thump.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.widget.Toast
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.therobm.thump.data.ThumpData
@@ -65,6 +69,27 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         }
     }
 
+    // Custom-command channel the playback service uses to push the unavailable-track reason
+    // string across the process boundary. NowPlaying lives in this (UI) process inside
+    // nowPlayingFlow, and the service cannot mutate it directly. The service's gate and safety
+    // net both broadcast a SessionCommand carrying the failing trackId and a human-readable
+    // reason; this listener parses that and routes it through publishNowPlayingFor so the mini
+    // player and Now Playing screen render the unavailable banner. The toast itself fires on
+    // the service side (single source of truth for ExoPlayer state), so this side only updates
+    // the flow.
+    private val controllerListener: MediaController.Listener = object : MediaController.Listener {
+        override fun onCustomCommand(
+            controller: MediaController,
+            command: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (command.customAction == SESSION_COMMAND_UNAVAILABLE_REASON) {
+                handleUnavailableReasonCommand(args)
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    }
+
     /**
      * Start the async connection to ThumpPlaybackService. Safe to call repeatedly; subsequent
      * calls while a connect is in flight or a controller is already bound are no-ops.
@@ -80,7 +105,12 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
             resolvedApplicationContext,
             ComponentName(resolvedApplicationContext, ThumpPlaybackService::class.java),
         )
-        val future = MediaController.Builder(resolvedApplicationContext, sessionToken).buildAsync()
+        val future: ListenableFuture<MediaController> = MediaController.Builder(
+            resolvedApplicationContext,
+            sessionToken,
+        )
+            .setListener(controllerListener)
+            .buildAsync()
         pendingControllerFuture = future
         future.addListener(
             {
@@ -423,6 +453,62 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         )
     }
 
+    /**
+     * Apply an unavailable-reason update broadcast by the service. The service stamps the
+     * failing trackId into the args bundle so we can publish the reason against the right row
+     * in the queue even if the player's currentMediaItemIndex has already moved on by the time
+     * the IPC arrives. Missing or unknown trackId falls back to the controller's current index
+     * (best effort — keeps the UI honest about *some* unavailable state rather than dropping
+     * the message on the floor).
+     */
+    private fun handleUnavailableReasonCommand(args: Bundle) {
+        val reason: String?
+        val rawReason: String? = args.getString(SESSION_COMMAND_ARG_REASON)
+        if (rawReason == null || rawReason.isEmpty()) {
+            reason = UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+        } else {
+            reason = rawReason
+        }
+        val trackId: String? = args.getString(SESSION_COMMAND_ARG_TRACK_ID)
+        val targetIndex: Int
+        if (trackId == null || trackId.isEmpty()) {
+            targetIndex = currentControllerMediaItemIndex()
+        } else {
+            val matchedIndex: Int = indexOfTrackId(trackId)
+            if (matchedIndex < 0) {
+                targetIndex = currentControllerMediaItemIndex()
+            } else {
+                targetIndex = matchedIndex
+            }
+        }
+        if (targetIndex < 0) {
+            return
+        }
+        publishNowPlayingFor(
+            targetIndex,
+            isPlayingHint = false,
+            unavailableReason = reason,
+        )
+    }
+
+    private fun currentControllerMediaItemIndex(): Int {
+        val controller: MediaController? = mediaController
+        if (controller == null) {
+            return -1
+        }
+        return controller.currentMediaItemIndex
+    }
+
+    private fun indexOfTrackId(trackId: String): Int {
+        val itemCount: Int = currentQueueMetadata.size
+        for (itemIndex in 0 until itemCount) {
+            if (currentQueueMetadata[itemIndex].trackId == trackId) {
+                return itemIndex
+            }
+        }
+        return -1
+    }
+
     // The prefetch IOException carries the protocol's underlying message. We cannot tell
     // "offline + uncached" from a generic transport error with certainty, but the offline-mode
     // message branch in ThumpData stamps "offline" into the text, so a substring check picks
@@ -446,5 +532,16 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         const val UNAVAILABLE_REASON_OFFLINE: String = "Not available offline"
         const val UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE: String = "Could not load track"
         const val UNAVAILABLE_REASON_NOT_CONFIGURED: String = "Server not configured"
+
+        // Service → controller custom-command channel for the auto-advance / skip cache-miss
+        // path. The playback service and the MediaController bind to the same MediaSession but
+        // live in separate processes, so the service has no direct handle on this controller's
+        // nowPlayingFlow. It broadcasts a SessionCommand carrying the failing trackId and a
+        // human-readable reason; controllerListener.onCustomCommand parses it and routes to
+        // publishNowPlayingFor. The action name is namespaced so it cannot collide with any
+        // Media3 built-in command.
+        const val SESSION_COMMAND_UNAVAILABLE_REASON: String = "com.therobm.thump.session.UNAVAILABLE_REASON"
+        const val SESSION_COMMAND_ARG_TRACK_ID: String = "trackId"
+        const val SESSION_COMMAND_ARG_REASON: String = "reason"
     }
 }

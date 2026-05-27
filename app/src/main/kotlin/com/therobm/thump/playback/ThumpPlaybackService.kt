@@ -1,10 +1,12 @@
 package com.therobm.thump.playback
 
+import android.os.Bundle
 import android.widget.Toast
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.datasource.DataSource
@@ -12,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
 import com.therobm.thump.data.ThumpData
 import com.therobm.thump.data.ThumpDataNotConfigured
 import com.therobm.thump.settings.ThumpSettings
@@ -76,6 +79,14 @@ class ThumpPlaybackService : MediaLibraryService() {
     private val prefetchJobsLock: Any = Any()
     private val prefetchJobsByTrackId: HashMap<String, Job> = HashMap<String, Job>()
 
+    // Tracks the trackIds with an active cache-miss recovery (gate or safety net) so the gate
+    // and safety net don't race each other into two parallel recoveries for the same track. The
+    // gate fires from onMediaItemTransition; the safety net fires from onPlayerError if
+    // ExoPlayer raced ahead and triggered DataSource.open before the gate's prefetch finished.
+    // Both end up in `runCacheMissRecovery`; the set entry is the dedup token.
+    private val inFlightCacheRecoveryLock: Any = Any()
+    private val inFlightCacheRecoveryTrackIds: HashSet<String> = HashSet<String>()
+
     override fun onCreate() {
         super.onCreate()
         val thumpDataForProcess: ThumpData = ThumpData(applicationContext)
@@ -132,13 +143,21 @@ class ThumpPlaybackService : MediaLibraryService() {
     private fun buildPlayerListener(player: Player): Player.Listener {
         return object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val trackId = extractTrackId(mediaItem)
+                val trackId: String? = extractTrackId(mediaItem)
                 currentScrobbleTrackId = trackId
                 hasSubmittedCurrent = false
                 if (trackId != null) {
                     fireScrobbleNowPlaying(trackId)
                 }
                 persistCurrentPlayerState(player)
+                // Proactive gate. PLAYLIST_CHANGED transitions are already covered by the
+                // cold-start (restorePersistedStateInto) and initial-play (PlaybackController.
+                // playQueue) gates, both of which await prefetch before installing items — so
+                // re-running the gate here would just produce a duplicate toast on the same
+                // failure. AUTO / SEEK / REPEAT transitions are the ones this gate exists for.
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
+                    maybeGateCurrentTrackOnCache(player, trackId)
+                }
                 refreshAudioPrefetchWindow(player)
             }
 
@@ -150,7 +169,223 @@ class ThumpPlaybackService : MediaLibraryService() {
                 val ignoredReason: Int = reason
                 refreshAudioPrefetchWindow(player)
             }
+
+            override fun onPlayerError(error: PlaybackException) {
+                // Safety net for the case where the gate didn't catch the miss — typically
+                // when ExoPlayer raced ahead of the onMediaItemTransition callback and called
+                // DataSource.open synchronously, getting the "audio blob not cached"
+                // IOException. Any other PlaybackException is intentionally left to ExoPlayer's
+                // existing error path; we only intervene on our own cache-miss signature.
+                handlePlayerErrorForCacheMiss(player, error)
+            }
         }
+    }
+
+    /**
+     * Proactive miss-recovery gate fired from `onMediaItemTransition` for AUTO / SEEK / REPEAT
+     * transitions. Synchronously checks whether the new current track's audio body is on disk;
+     * if it is, this is a no-op and existing flow proceeds. If it isn't, captures the player's
+     * `playWhenReady`, forces it to false, and hands off to `runCacheMissRecovery`. The
+     * cache check is a single SQLite row read plus a `File.exists()` — safe on Main.
+     *
+     * No-op when [trackId] is null (transition to an unknown / empty queue) or when ThumpData
+     * hasn't been constructed yet (onCreate is mid-flight).
+     */
+    private fun maybeGateCurrentTrackOnCache(player: Player, trackId: String?): Unit {
+        if (trackId == null) {
+            return
+        }
+        val thumpDataInstance: ThumpData? = serviceThumpData
+        if (thumpDataInstance == null) {
+            return
+        }
+        val cached: Boolean = thumpDataInstance.isAudioBlobCached(trackId)
+        if (cached) {
+            return
+        }
+        val capturedPlayWhenReady: Boolean = player.playWhenReady
+        player.playWhenReady = false
+        runCacheMissRecovery(
+            player = player,
+            trackId = trackId,
+            playWhenReadyToRestoreOnSuccess = capturedPlayWhenReady,
+        )
+    }
+
+    /**
+     * Inspect a PlaybackException for our cache-miss IOException signature and, if matched,
+     * pause + drive a recovery for the failing trackId. Any other PlaybackException is left
+     * alone — ExoPlayer's existing error path handles those.
+     *
+     * The matched trackId is parsed from the IOException message (the format is stamped by
+     * `ThumpData.open`); if parsing fails for any reason we fall back to the player's current
+     * MediaItem id so the recovery still has something to act on.
+     */
+    private fun handlePlayerErrorForCacheMiss(
+        player: Player,
+        error: PlaybackException,
+    ): Unit {
+        val matchedTrackId: String? = extractCacheMissTrackId(error)
+        if (matchedTrackId == null) {
+            return
+        }
+        val resolvedTrackId: String
+        if (matchedTrackId.isEmpty()) {
+            val fallbackTrackId: String? = extractTrackId(player.currentMediaItem)
+            if (fallbackTrackId == null) {
+                return
+            }
+            resolvedTrackId = fallbackTrackId
+        } else {
+            resolvedTrackId = matchedTrackId
+        }
+        val capturedPlayWhenReady: Boolean = player.playWhenReady
+        player.playWhenReady = false
+        runCacheMissRecovery(
+            player = player,
+            trackId = resolvedTrackId,
+            playWhenReadyToRestoreOnSuccess = capturedPlayWhenReady,
+        )
+    }
+
+    /**
+     * Shared body of the gate's miss branch and the safety-net error path.
+     *
+     *  1. Dedupes by trackId — if a recovery is already in flight for the same id, the second
+     *     caller bails out so we don't fire two prefetches and two toasts on the same miss.
+     *  2. Launches a coroutine on the service scope that awaits `prefetchAudio(trackId)`.
+     *  3. On success — if the player is still pointing at the same track (the user may have
+     *     skipped during the await), calls `player.prepare()` and restores `playWhenReady`.
+     *     If the user moved on, the new transition's own gate handles it — we no-op.
+     *  4. On failure — pauses, fires a Toast, and broadcasts the unavailable reason via the
+     *     MediaSession's custom-command channel so the UI process's PlaybackController can
+     *     surface it on NowPlaying. ThumpDataNotConfigured / IOException / CancellationException
+     *     are mapped through the same `classifyRestoreIoFailure` pattern the cold-start path
+     *     uses, so error strings stay consistent across surfaces.
+     */
+    private fun runCacheMissRecovery(
+        player: Player,
+        trackId: String,
+        playWhenReadyToRestoreOnSuccess: Boolean,
+    ): Unit {
+        val thumpDataInstance: ThumpData? = serviceThumpData
+        if (thumpDataInstance == null) {
+            return
+        }
+        val acquiredRecoverySlot: Boolean
+        synchronized(inFlightCacheRecoveryLock) {
+            if (inFlightCacheRecoveryTrackIds.contains(trackId)) {
+                acquiredRecoverySlot = false
+            } else {
+                inFlightCacheRecoveryTrackIds.add(trackId)
+                acquiredRecoverySlot = true
+            }
+        }
+        if (!acquiredRecoverySlot) {
+            return
+        }
+        serviceCoroutineScope.launch {
+            var prefetchSucceeded: Boolean = false
+            var prefetchFailureReason: String? = null
+            try {
+                thumpDataInstance.prefetchAudio(trackId)
+                prefetchSucceeded = true
+            } catch (cancellation: CancellationException) {
+                releaseRecoverySlot(trackId)
+                throw cancellation
+            } catch (notConfigured: ThumpDataNotConfigured) {
+                val ignoredNotConfigured: ThumpDataNotConfigured = notConfigured
+                prefetchFailureReason = PlaybackController.UNAVAILABLE_REASON_NOT_CONFIGURED
+            } catch (cacheMissOrTransport: IOException) {
+                prefetchFailureReason = classifyRestoreIoFailure(cacheMissOrTransport)
+            }
+            try {
+                withContext(Dispatchers.Main) {
+                    val stillCurrentTrackId: String? = extractTrackId(player.currentMediaItem)
+                    val stillSameTrack: Boolean = stillCurrentTrackId != null
+                        && stillCurrentTrackId == trackId
+                    if (prefetchSucceeded) {
+                        if (stillSameTrack) {
+                            player.prepare()
+                            player.playWhenReady = playWhenReadyToRestoreOnSuccess
+                        }
+                    } else {
+                        val failureMessage: String
+                        if (prefetchFailureReason == null) {
+                            failureMessage = PlaybackController.UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+                        } else {
+                            failureMessage = prefetchFailureReason
+                        }
+                        if (stillSameTrack) {
+                            player.playWhenReady = false
+                        }
+                        Toast.makeText(
+                            applicationContext,
+                            failureMessage,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        broadcastUnavailableReason(trackId, failureMessage)
+                    }
+                }
+            } finally {
+                releaseRecoverySlot(trackId)
+            }
+        }
+    }
+
+    private fun releaseRecoverySlot(trackId: String): Unit {
+        synchronized(inFlightCacheRecoveryLock) {
+            inFlightCacheRecoveryTrackIds.remove(trackId)
+        }
+    }
+
+    /**
+     * Cross-process push of the unavailable reason to every connected MediaController. The
+     * controller in the UI process owns the NowPlaying StateFlow and surfaces the banner; this
+     * is the only IPC path that carries the reason string. Toast fires service-side (see the
+     * runCacheMissRecovery body) so we do not double up across processes.
+     */
+    private fun broadcastUnavailableReason(trackId: String, reason: String): Unit {
+        val sessionSnapshot: MediaSession? = librarySession
+        if (sessionSnapshot == null) {
+            return
+        }
+        val args: Bundle = Bundle()
+        args.putString(PlaybackController.SESSION_COMMAND_ARG_TRACK_ID, trackId)
+        args.putString(PlaybackController.SESSION_COMMAND_ARG_REASON, reason)
+        val command: SessionCommand = SessionCommand(
+            PlaybackController.SESSION_COMMAND_UNAVAILABLE_REASON,
+            Bundle.EMPTY,
+        )
+        sessionSnapshot.broadcastCustomCommand(command, args)
+    }
+
+    /**
+     * Walk a PlaybackException's cause chain for our cache-miss IOException signature. Returns
+     * the trackId portion of the message ("trackId=<id>") on a hit, an empty string when the
+     * signature matched but the id was unparseable (caller substitutes the player's current
+     * id), or null when this is not a cache-miss error and we should leave it alone.
+     */
+    private fun extractCacheMissTrackId(error: PlaybackException): String? {
+        val marker: String = "ThumpData: audio blob not cached for trackId="
+        val maxCauseDepth: Int = 32
+        var cursor: Throwable? = error
+        for (depth in 0 until maxCauseDepth) {
+            val current: Throwable? = cursor
+            if (current == null) {
+                return null
+            }
+            val message: String? = current.message
+            if (message != null && message.contains(marker)) {
+                val afterMarker: String = message.substringAfter(marker)
+                // The message format is "...trackId=<id> — playback service must..."; cut at
+                // the first whitespace so the dash separator does not leak into the id.
+                val trackIdRaw: String = afterMarker.substringBefore(' ')
+                return trackIdRaw
+            }
+            cursor = current.cause
+        }
+        return null
     }
 
     /**
