@@ -445,14 +445,18 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
      * the IPC arrives. Missing or unknown trackId falls back to the controller's current index
      * (best effort — keeps the UI honest about *some* unavailable state rather than dropping
      * the message on the floor).
+     *
+     * A missing or empty reason is a "clear" signal — the service sends one of these after a
+     * recovery prefetch succeeds so the transient LOADING banner is wiped before playback
+     * actually starts. Carries through as `unavailableReason = null` on the NowPlaying flow.
      */
     private fun handleUnavailableReasonCommand(args: Bundle) {
-        val reason: String?
         val rawReason: String? = args.getString(SESSION_COMMAND_ARG_REASON)
+        val resolvedReason: String?
         if (rawReason == null || rawReason.isEmpty()) {
-            reason = UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+            resolvedReason = null
         } else {
-            reason = rawReason
+            resolvedReason = rawReason
         }
         val trackId: String? = args.getString(SESSION_COMMAND_ARG_TRACK_ID)
         val targetIndex: Int
@@ -472,7 +476,7 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         publishNowPlayingFor(
             targetIndex,
             isPlayingHint = false,
-            unavailableReason = reason,
+            unavailableReason = resolvedReason,
         )
     }
 
@@ -502,6 +506,13 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         const val UNAVAILABLE_REASON_OFFLINE: String = "Not available offline — tap play to retry"
         const val UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE: String = "Could not load track — tap play to retry"
         const val UNAVAILABLE_REASON_NOT_CONFIGURED: String = "Server not configured"
+
+        // Transient marker the service publishes during onPlayerError recovery (cache-miss
+        // prefetch in progress). The UI branches on this exact string to render a progress
+        // indicator instead of a play/retry icon and to use the neutral banner colour rather
+        // than the failure-state muted-red. Held as a constant so the service and the UI share
+        // a single source of truth for the value.
+        const val UNAVAILABLE_REASON_LOADING: String = "Loading…"
 
         // Service → controller custom-command channel for the auto-advance / skip cache-miss
         // path. The playback service and the MediaController bind to the same MediaSession but

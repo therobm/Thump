@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,20 +52,26 @@ fun MiniPlayer(
     onExpandClicked: () -> Unit,
 ) {
     val unavailableReason: String? = nowPlaying.unavailableReason
+    // LOADING is a transient state during the service's onPlayerError prefetch recovery and
+    // should render like a normal row (expandable, neutral colours) except that the play button
+    // slot shows a progress indicator. Only true failure states (offline, generic load failure,
+    // not configured) lock down the row and turn the affordance into a retry.
+    val isLoadingState: Boolean = unavailableReason == PlaybackController.UNAVAILABLE_REASON_LOADING
+    val isFailureState: Boolean = unavailableReason != null && !isLoadingState
     val rowModifier: Modifier
-    if (unavailableReason == null) {
+    if (isFailureState) {
+        // Tap-to-expand is disabled in the failure state — only the play button is hot, and it
+        // acts as a retry. The row still renders so the user sees what they tapped and the
+        // reason text.
+        rowModifier = Modifier
+            .fillMaxWidth()
+            .background(ThumpColors.SurfaceElevated)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    } else {
         rowModifier = Modifier
             .fillMaxWidth()
             .background(ThumpColors.SurfaceElevated)
             .clickable(onClick = onExpandClicked)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    } else {
-        // Tap-to-expand is disabled in the unavailable state — only the play button is hot,
-        // and it acts as a retry. The row still renders so the user sees what they tapped and
-        // the reason text.
-        rowModifier = Modifier
-            .fillMaxWidth()
-            .background(ThumpColors.SurfaceElevated)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     }
     Row(
@@ -93,10 +100,16 @@ fun MiniPlayer(
                 overflow = TextOverflow.Ellipsis,
             )
             if (unavailableReason != null) {
+                val reasonColor: Color
+                if (isFailureState) {
+                    reasonColor = UnavailableAccent
+                } else {
+                    reasonColor = ThumpColors.TextSecondary
+                }
                 Text(
                     text = unavailableReason,
                     style = MaterialTheme.typography.bodySmall,
-                    color = UnavailableAccent,
+                    color = reasonColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -111,34 +124,44 @@ fun MiniPlayer(
             }
         }
 
-        val effectiveClick: () -> Unit
-        if (unavailableReason == null) {
-            effectiveClick = onPlayPauseClicked
+        if (isLoadingState) {
+            // Loading state is non-interactive: the prefetch is already in flight. Match the
+            // play-icon footprint so the row height stays stable across state transitions.
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = ThumpColors.OnSurface,
+                strokeWidth = 2.dp,
+            )
         } else {
-            effectiveClick = onRetryClicked
-        }
-        IconButton(onClick = effectiveClick) {
-            if (unavailableReason == null && nowPlaying.isPlaying) {
-                Icon(
-                    imageVector = Icons.Filled.Pause,
-                    contentDescription = "Pause",
-                    tint = ThumpColors.OnSurface,
-                )
+            val effectiveClick: () -> Unit
+            if (isFailureState) {
+                effectiveClick = onRetryClicked
             } else {
-                val iconTint: Color
-                val iconDescription: String
-                if (unavailableReason == null) {
-                    iconTint = ThumpColors.OnSurface
-                    iconDescription = "Play"
+                effectiveClick = onPlayPauseClicked
+            }
+            IconButton(onClick = effectiveClick) {
+                if (!isFailureState && nowPlaying.isPlaying) {
+                    Icon(
+                        imageVector = Icons.Filled.Pause,
+                        contentDescription = "Pause",
+                        tint = ThumpColors.OnSurface,
+                    )
                 } else {
-                    iconTint = UnavailableAccent
-                    iconDescription = "Retry"
+                    val iconTint: Color
+                    val iconDescription: String
+                    if (isFailureState) {
+                        iconTint = UnavailableAccent
+                        iconDescription = "Retry"
+                    } else {
+                        iconTint = ThumpColors.OnSurface
+                        iconDescription = "Play"
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = iconDescription,
+                        tint = iconTint,
+                    )
                 }
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = iconDescription,
-                    tint = iconTint,
-                )
             }
         }
     }

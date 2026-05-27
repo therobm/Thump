@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -142,9 +143,14 @@ fun NowPlayingScreen(
         TrackInfoBlock(nowPlaying = nowPlaying)
 
         val unavailableReason: String? = nowPlaying.unavailableReason
+        // LOADING is a transient state during the service's onPlayerError prefetch recovery —
+        // banner stays neutral so the user reads it as progress, not failure. Other non-null
+        // reasons mean the load actually failed; banner switches to muted-red to flag it.
+        val isLoadingState: Boolean = unavailableReason == PlaybackController.UNAVAILABLE_REASON_LOADING
+        val isFailureState: Boolean = unavailableReason != null && !isLoadingState
         if (unavailableReason != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            UnavailableBanner(reason = unavailableReason)
+            UnavailableBanner(reason = unavailableReason, isFailure = isFailureState)
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -165,12 +171,14 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // In the unavailable state, skip controls are dead: auto-advance has already failed, so
-        // the next/prev buttons wouldn't get the user anywhere useful. The play button stays
-        // hot and acts as a retry.
-        val skipControlsEnabled: Boolean = unavailableReason == null
+        // Skip controls stay live regardless of the unavailable state. Manual queue navigation
+        // is always the user's escape hatch — even from a failed track, they should be able to
+        // step past it without first hitting retry. Auto-advance is a separate code path on the
+        // service side and is unaffected by this.
         val onPlayPauseClicked: () -> Unit
-        if (unavailableReason == null) {
+        if (isFailureState) {
+            onPlayPauseClicked = { playbackController.retryCurrentTrack() }
+        } else {
             onPlayPauseClicked = {
                 if (nowPlaying.isPlaying) {
                     playbackController.pause()
@@ -178,14 +186,12 @@ fun NowPlayingScreen(
                     playbackController.resume()
                 }
             }
-        } else {
-            onPlayPauseClicked = { playbackController.retryCurrentTrack() }
         }
         TransportControlsRow(
             isPlaying = nowPlaying.isPlaying,
-            playPauseEnabled = true,
-            skipControlsEnabled = skipControlsEnabled,
-            isRetryMode = unavailableReason != null,
+            playPauseEnabled = !isLoadingState,
+            isLoadingState = isLoadingState,
+            isRetryMode = isFailureState,
             onPreviousClicked = { playbackController.skipToPrevious() },
             onPlayPauseClicked = onPlayPauseClicked,
             onNextClicked = { playbackController.skipToNext() },
@@ -196,7 +202,13 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun UnavailableBanner(reason: String) {
+private fun UnavailableBanner(reason: String, isFailure: Boolean) {
+    val bannerColor: Color
+    if (isFailure) {
+        bannerColor = UnavailableAccent
+    } else {
+        bannerColor = ThumpColors.OnBackground
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -206,7 +218,7 @@ private fun UnavailableBanner(reason: String) {
         Text(
             text = reason,
             style = MaterialTheme.typography.bodyMedium,
-            color = UnavailableAccent,
+            color = bannerColor,
             textAlign = TextAlign.Center,
         )
     }
@@ -351,18 +363,13 @@ private fun SeekBarBlock(
 private fun TransportControlsRow(
     isPlaying: Boolean,
     playPauseEnabled: Boolean,
-    skipControlsEnabled: Boolean,
+    isLoadingState: Boolean,
     isRetryMode: Boolean,
     onPreviousClicked: () -> Unit,
     onPlayPauseClicked: () -> Unit,
     onNextClicked: () -> Unit,
 ) {
-    val sideTint: Color
-    if (skipControlsEnabled) {
-        sideTint = ThumpColors.OnBackground
-    } else {
-        sideTint = ThumpColors.TextSecondary
-    }
+    val sideTint: Color = ThumpColors.OnBackground
     val centerTint: Color
     if (!playPauseEnabled) {
         centerTint = ThumpColors.TextSecondary
@@ -380,7 +387,6 @@ private fun TransportControlsRow(
     ) {
         IconButton(
             onClick = onPreviousClicked,
-            enabled = skipControlsEnabled,
             modifier = Modifier.size(SIDE_TRANSPORT_BUTTON_SIZE_DP.dp),
         ) {
             Icon(
@@ -391,37 +397,53 @@ private fun TransportControlsRow(
             )
         }
         Spacer(modifier = Modifier.size(16.dp))
-        IconButton(
-            onClick = onPlayPauseClicked,
-            enabled = playPauseEnabled,
-            modifier = Modifier.size(LARGE_PLAY_BUTTON_SIZE_DP.dp),
-        ) {
-            if (isPlaying && !isRetryMode) {
-                Icon(
-                    imageVector = Icons.Filled.Pause,
-                    contentDescription = "Pause",
-                    tint = centerTint,
-                    modifier = Modifier.size(56.dp),
+        if (isLoadingState) {
+            // Recovery prefetch is in flight — render a progress indicator in the play-button
+            // slot so the user gets explicit "we're loading this" feedback instead of staring
+            // at a frozen play icon. Sized to match the large play button so the surrounding
+            // layout does not shift between states.
+            Box(
+                modifier = Modifier.size(LARGE_PLAY_BUTTON_SIZE_DP.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(40.dp),
+                    color = ThumpColors.Accent,
+                    strokeWidth = 3.dp,
                 )
-            } else {
-                val description: String
-                if (isRetryMode) {
-                    description = "Retry"
+            }
+        } else {
+            IconButton(
+                onClick = onPlayPauseClicked,
+                enabled = playPauseEnabled,
+                modifier = Modifier.size(LARGE_PLAY_BUTTON_SIZE_DP.dp),
+            ) {
+                if (isPlaying && !isRetryMode) {
+                    Icon(
+                        imageVector = Icons.Filled.Pause,
+                        contentDescription = "Pause",
+                        tint = centerTint,
+                        modifier = Modifier.size(56.dp),
+                    )
                 } else {
-                    description = "Play"
+                    val description: String
+                    if (isRetryMode) {
+                        description = "Retry"
+                    } else {
+                        description = "Play"
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = description,
+                        tint = centerTint,
+                        modifier = Modifier.size(56.dp),
+                    )
                 }
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = description,
-                    tint = centerTint,
-                    modifier = Modifier.size(56.dp),
-                )
             }
         }
         Spacer(modifier = Modifier.size(16.dp))
         IconButton(
             onClick = onNextClicked,
-            enabled = skipControlsEnabled,
             modifier = Modifier.size(SIDE_TRANSPORT_BUTTON_SIZE_DP.dp),
         ) {
             Icon(

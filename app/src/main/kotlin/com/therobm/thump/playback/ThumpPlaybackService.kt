@@ -174,10 +174,14 @@ class ThumpPlaybackService : MediaLibraryService() {
      * The flow:
      *   1. If the error is not our "audio blob not cached" signature, leave it for ExoPlayer's
      *      existing error path.
-     *   2. Launch a prefetch for the failed trackId. On success — if the player is still on the
-     *      same MediaItem, call player.prepare() to re-trigger the load. playWhenReady was never
-     *      touched, so the player auto-resumes when buffering completes.
-     *   3. On prefetch failure — try to auto-advance forward to the next cached track. If none
+     *   2. Broadcast UNAVAILABLE_REASON_LOADING so the UI shows a transient loading indicator
+     *      instead of leaving the user staring at a frozen mini player.
+     *   3. Launch a prefetch for the failed trackId. On success — if the player is still on the
+     *      same MediaItem, call player.prepare() and force playWhenReady=true. onPlayerError only
+     *      fires when the player was already attempting to load (playWhenReady was already true),
+     *      so re-asserting it preserves user intent and avoids the prepared-but-paused state.
+     *      Then clear the loading banner.
+     *   4. On prefetch failure — try to auto-advance forward to the next cached track. If none
      *      exists, pause the player as a terminal state and surface the unavailable banner.
      *
      * Recovery is intentionally non-reentrant per-error; the next onPlayerError invocation drives
@@ -206,6 +210,12 @@ class ThumpPlaybackService : MediaLibraryService() {
             return
         }
         serviceCoroutineScope.launch {
+            withContext(Dispatchers.Main) {
+                broadcastUnavailableReason(
+                    resolvedTrackId,
+                    PlaybackController.UNAVAILABLE_REASON_LOADING,
+                )
+            }
             var prefetchSucceeded: Boolean = false
             var prefetchFailureReason: String? = null
             try {
@@ -224,11 +234,12 @@ class ThumpPlaybackService : MediaLibraryService() {
                     toastedFailureTrackIds.remove(resolvedTrackId)
                     val stillCurrentTrackId: String? = extractTrackId(player.currentMediaItem)
                     if (stillCurrentTrackId != null && stillCurrentTrackId == resolvedTrackId) {
-                        // Bytes are on disk now — re-trigger the load. playWhenReady is whatever
-                        // the user last set it to, so the player auto-resumes after buffering.
-                        // If the user has already moved on, the new current track's own load
-                        // will trigger its own recovery via this same path.
+                        // Bytes are on disk now — re-trigger the load. Re-assert playWhenReady so
+                        // the player actually resumes instead of sitting in a prepared-but-paused
+                        // state, then clear the loading banner so the UI returns to normal.
                         player.prepare()
+                        player.playWhenReady = true
+                        broadcastUnavailableReasonClear(resolvedTrackId)
                     }
                 } else {
                     val failureMessage: String
@@ -324,6 +335,26 @@ class ThumpPlaybackService : MediaLibraryService() {
         val args: Bundle = Bundle()
         args.putString(PlaybackController.SESSION_COMMAND_ARG_TRACK_ID, trackId)
         args.putString(PlaybackController.SESSION_COMMAND_ARG_REASON, reason)
+        val command: SessionCommand = SessionCommand(
+            PlaybackController.SESSION_COMMAND_UNAVAILABLE_REASON,
+            Bundle.EMPTY,
+        )
+        sessionSnapshot.broadcastCustomCommand(command, args)
+    }
+
+    /**
+     * Companion to broadcastUnavailableReason: signal the controller that the previously-flagged
+     * trackId is no longer in an unavailable state, so the banner can be wiped. Sent after the
+     * recovery prefetch succeeds. The reason key is omitted from the args bundle; the controller
+     * treats a missing/empty reason as "clear".
+     */
+    private fun broadcastUnavailableReasonClear(trackId: String): Unit {
+        val sessionSnapshot: MediaSession? = librarySession
+        if (sessionSnapshot == null) {
+            return
+        }
+        val args: Bundle = Bundle()
+        args.putString(PlaybackController.SESSION_COMMAND_ARG_TRACK_ID, trackId)
         val command: SessionCommand = SessionCommand(
             PlaybackController.SESSION_COMMAND_UNAVAILABLE_REASON,
             Bundle.EMPTY,
