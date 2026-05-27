@@ -253,13 +253,12 @@ class ThumpPlaybackService : MediaLibraryService() {
                     // track, the LOADING state for this trackId is no longer valid. Clear it.
                     broadcastUnavailableReasonClear(resolvedTrackId)
                     val stillCurrentTrackId: String? = extractTrackId(player.currentMediaItem)
-                    val stillSameTrack: Boolean = stillCurrentTrackId != null
-                        && stillCurrentTrackId == resolvedTrackId
+                    val playerIsIdle: Boolean = player.playbackState == Player.STATE_IDLE
                     Log.d("ThumpRecovery", "post-prefetch trackId=" + resolvedTrackId
-                        + " stillCurrent=" + stillSameTrack
+                        + " playerIsIdle=" + playerIsIdle
                         + " playbackState=" + player.playbackState
                         + " currentMediaItemTrackId=" + stillCurrentTrackId)
-                    if (stillSameTrack) {
+                    if (playerIsIdle) {
                         player.prepare()
                         player.playWhenReady = true
                         Log.d("ThumpRecovery", "called prepare() + playWhenReady=true trackId=" + resolvedTrackId)
