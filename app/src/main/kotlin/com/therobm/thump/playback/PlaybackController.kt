@@ -2,6 +2,7 @@ package com.therobm.thump.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.widget.Toast
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -135,7 +136,7 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
             }
             currentQueueSource = PlaybackSource(kind = kind, name = source.name)
         }
-        publishNowPlayingFor(persisted.currentIndex, isPlayingHint = false)
+        publishNowPlayingFor(persisted.currentIndex, isPlayingHint = false, unavailableReason = null)
     }
 
     /**
@@ -190,6 +191,7 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         val currentTrackId: String = items[safeStartIndex].trackId
         playbackCoroutineScope.launch {
             var prefetchSucceeded: Boolean = false
+            var prefetchFailureReason: String? = null
             try {
                 thumpDataForPrefetch.prefetchAudio(currentTrackId)
                 prefetchSucceeded = true
@@ -199,17 +201,31 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
                 // No active protocol — surface a non-playing state so the UI shows the track
                 // selection but does not pretend playback started.
                 val ignoredNotConfigured: ThumpDataNotConfigured = notConfigured
+                prefetchFailureReason = UNAVAILABLE_REASON_NOT_CONFIGURED
             } catch (cacheMissOrTransport: IOException) {
                 // Offline + not cached, or download failure. Same UX as above.
-                val ignoredCacheMissOrTransport: IOException = cacheMissOrTransport
+                prefetchFailureReason = classifyPrefetchIoFailure(cacheMissOrTransport)
             }
             if (prefetchSucceeded) {
                 controller.setMediaItems(mediaItems, safeStartIndex, 0L)
                 controller.prepare()
                 controller.playWhenReady = true
-                publishNowPlayingFor(safeStartIndex, isPlayingHint = true)
+                publishNowPlayingFor(safeStartIndex, isPlayingHint = true, unavailableReason = null)
             } else {
-                publishNowPlayingFor(safeStartIndex, isPlayingHint = false)
+                val failureMessage: String
+                if (prefetchFailureReason == null) {
+                    failureMessage = UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+                } else {
+                    failureMessage = prefetchFailureReason
+                }
+                publishNowPlayingFor(
+                    safeStartIndex,
+                    isPlayingHint = false,
+                    unavailableReason = failureMessage,
+                )
+                // playbackCoroutineScope runs on Dispatchers.Main.immediate, so Toast.makeText
+                // can be invoked directly without an extra dispatch.
+                Toast.makeText(resolvedApplicationContext, failureMessage, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -347,7 +363,11 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
             return
         }
         val newIndex = controller.currentMediaItemIndex
-        publishNowPlayingFor(newIndex, isPlayingHint = controller.isPlaying)
+        publishNowPlayingFor(
+            newIndex,
+            isPlayingHint = controller.isPlaying,
+            unavailableReason = null,
+        )
     }
 
     private fun persistCurrentQueueState(currentIndex: Int, positionMs: Long) {
@@ -382,11 +402,15 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         )
     }
 
-    private fun publishNowPlayingFor(index: Int, isPlayingHint: Boolean) {
+    private fun publishNowPlayingFor(
+        index: Int,
+        isPlayingHint: Boolean,
+        unavailableReason: String?,
+    ) {
         if (index < 0 || index >= currentQueueMetadata.size) {
             return
         }
-        val item = currentQueueMetadata[index]
+        val item: PlaybackQueueItem = currentQueueMetadata[index]
         nowPlayingFlow.value = NowPlaying(
             trackId = item.trackId,
             title = item.title,
@@ -395,12 +419,32 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
             coverArtId = item.coverArtId,
             isPlaying = isPlayingHint,
             source = currentQueueSource,
+            unavailableReason = unavailableReason,
         )
+    }
+
+    // The prefetch IOException carries the protocol's underlying message. We cannot tell
+    // "offline + uncached" from a generic transport error with certainty, but the offline-mode
+    // message branch in ThumpData stamps "offline" into the text, so a substring check picks
+    // it up without coupling to a stable error type.
+    private fun classifyPrefetchIoFailure(failure: IOException): String {
+        val rawMessage: String? = failure.message
+        if (rawMessage == null) {
+            return UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+        }
+        if (rawMessage.contains("offline", ignoreCase = true)) {
+            return UNAVAILABLE_REASON_OFFLINE
+        }
+        return UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
     }
 
     companion object {
         // Pressing previous within this many ms of the start of a track moves to the previous
         // track. After this, previous restarts the current track. Standard media-app convention.
         private const val PREVIOUS_RESTART_THRESHOLD_MS: Long = 3000L
+
+        const val UNAVAILABLE_REASON_OFFLINE: String = "Not available offline"
+        const val UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE: String = "Could not load track"
+        const val UNAVAILABLE_REASON_NOT_CONFIGURED: String = "Server not configured"
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
@@ -55,6 +56,10 @@ private const val POSITION_POLL_INTERVAL_MS: Long = 500L
 private const val LARGE_PLAY_BUTTON_SIZE_DP: Int = 72
 private const val SIDE_TRANSPORT_BUTTON_SIZE_DP: Int = 56
 private const val NOW_PLAYING_ART_REQUEST_SIZE_PX: Int = 600
+
+// Muted red used to flag the unavailable banner. Local because this colour is only used by the
+// unavailable state in the playback surfaces.
+private val UnavailableAccent: Color = Color(0xFFD08080)
 
 /**
  * The full-screen Now Playing view. Reached by tapping the mini player.
@@ -136,6 +141,12 @@ fun NowPlayingScreen(
 
         TrackInfoBlock(nowPlaying = nowPlaying)
 
+        val unavailableReason: String? = nowPlaying.unavailableReason
+        if (unavailableReason != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            UnavailableBanner(reason = unavailableReason)
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         SeekBarBlock(
@@ -154,8 +165,10 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        val controlsEnabled: Boolean = unavailableReason == null
         TransportControlsRow(
             isPlaying = nowPlaying.isPlaying,
+            controlsEnabled = controlsEnabled,
             onPreviousClicked = { playbackController.skipToPrevious() },
             onPlayPauseClicked = {
                 if (nowPlaying.isPlaying) {
@@ -168,6 +181,23 @@ fun NowPlayingScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun UnavailableBanner(reason: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = reason,
+            style = MaterialTheme.typography.bodyMedium,
+            color = UnavailableAccent,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -309,10 +339,20 @@ private fun SeekBarBlock(
 @Composable
 private fun TransportControlsRow(
     isPlaying: Boolean,
+    controlsEnabled: Boolean,
     onPreviousClicked: () -> Unit,
     onPlayPauseClicked: () -> Unit,
     onNextClicked: () -> Unit,
 ) {
+    val sideTint: Color
+    val centerTint: Color
+    if (controlsEnabled) {
+        sideTint = ThumpColors.OnBackground
+        centerTint = ThumpColors.Accent
+    } else {
+        sideTint = ThumpColors.TextSecondary
+        centerTint = ThumpColors.TextSecondary
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,32 +362,34 @@ private fun TransportControlsRow(
     ) {
         IconButton(
             onClick = onPreviousClicked,
+            enabled = controlsEnabled,
             modifier = Modifier.size(SIDE_TRANSPORT_BUTTON_SIZE_DP.dp),
         ) {
             Icon(
                 imageVector = Icons.Filled.SkipPrevious,
                 contentDescription = "Previous",
-                tint = ThumpColors.OnBackground,
+                tint = sideTint,
                 modifier = Modifier.size(36.dp),
             )
         }
         Spacer(modifier = Modifier.size(16.dp))
         IconButton(
             onClick = onPlayPauseClicked,
+            enabled = controlsEnabled,
             modifier = Modifier.size(LARGE_PLAY_BUTTON_SIZE_DP.dp),
         ) {
             if (isPlaying) {
                 Icon(
                     imageVector = Icons.Filled.Pause,
                     contentDescription = "Pause",
-                    tint = ThumpColors.Accent,
+                    tint = centerTint,
                     modifier = Modifier.size(56.dp),
                 )
             } else {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = "Play",
-                    tint = ThumpColors.Accent,
+                    tint = centerTint,
                     modifier = Modifier.size(56.dp),
                 )
             }
@@ -355,12 +397,13 @@ private fun TransportControlsRow(
         Spacer(modifier = Modifier.size(16.dp))
         IconButton(
             onClick = onNextClicked,
+            enabled = controlsEnabled,
             modifier = Modifier.size(SIDE_TRANSPORT_BUTTON_SIZE_DP.dp),
         ) {
             Icon(
                 imageVector = Icons.Filled.SkipNext,
                 contentDescription = "Next",
-                tint = ThumpColors.OnBackground,
+                tint = sideTint,
                 modifier = Modifier.size(36.dp),
             )
         }

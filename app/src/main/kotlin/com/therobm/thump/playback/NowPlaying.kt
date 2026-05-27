@@ -7,6 +7,10 @@ package com.therobm.thump.playback
  * full now-playing screen. coverArtId is the stable cover-art identifier; the renderer calls
  * ThumpData.getCoverArt to materialise a Bitmap. album is optional — some entry points do not
  * carry it through.
+ *
+ * unavailableReason is non-null when the track is loaded but cannot play (prefetch failed offline,
+ * no protocol configured, transport error). The UI uses it to show an error indicator instead of
+ * normal play/pause affordance. Null means the normal playable state.
  */
 data class NowPlaying(
     val trackId: String,
@@ -16,4 +20,5 @@ data class NowPlaying(
     val coverArtId: String?,
     val isPlaying: Boolean,
     val source: PlaybackSource?,
+    val unavailableReason: String? = null,
 )

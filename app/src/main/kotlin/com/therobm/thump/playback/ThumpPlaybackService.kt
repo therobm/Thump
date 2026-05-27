@@ -1,5 +1,6 @@
 package com.therobm.thump.playback
 
+import android.widget.Toast
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -203,6 +204,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         }
         serviceCoroutineScope.launch {
             var prefetchSucceeded: Boolean = false
+            var prefetchFailureReason: String? = null
             try {
                 thumpDataInstance.prefetchAudio(currentTrackId)
                 prefetchSucceeded = true
@@ -211,9 +213,10 @@ class ThumpPlaybackService : MediaLibraryService() {
             } catch (notConfigured: ThumpDataNotConfigured) {
                 // No active protocol — fall through to the queue-only restore branch.
                 val ignoredNotConfigured: ThumpDataNotConfigured = notConfigured
+                prefetchFailureReason = PlaybackController.UNAVAILABLE_REASON_NOT_CONFIGURED
             } catch (cacheMissOrTransport: IOException) {
                 // Offline + not cached, or download failure — fall through likewise.
-                val ignoredCacheMissOrTransport: IOException = cacheMissOrTransport
+                prefetchFailureReason = classifyRestoreIoFailure(cacheMissOrTransport)
             }
             withContext(Dispatchers.Main) {
                 if (prefetchSucceeded) {
@@ -223,11 +226,29 @@ class ThumpPlaybackService : MediaLibraryService() {
                 } else {
                     player.setMediaItems(mediaItems, safeIndex, restorePositionMs)
                     player.playWhenReady = false
+                    val failureMessage: String
+                    if (prefetchFailureReason == null) {
+                        failureMessage = PlaybackController.UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+                    } else {
+                        failureMessage = prefetchFailureReason
+                    }
+                    Toast.makeText(applicationContext, failureMessage, Toast.LENGTH_LONG).show()
                 }
                 currentScrobbleTrackId = currentTrackId
                 hasSubmittedCurrent = false
             }
         }
+    }
+
+    private fun classifyRestoreIoFailure(failure: IOException): String {
+        val rawMessage: String? = failure.message
+        if (rawMessage == null) {
+            return PlaybackController.UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
+        }
+        if (rawMessage.contains("offline", ignoreCase = true)) {
+            return PlaybackController.UNAVAILABLE_REASON_OFFLINE
+        }
+        return PlaybackController.UNAVAILABLE_REASON_GENERIC_LOAD_FAILURE
     }
 
     private fun buildMediaItemFromPersisted(item: PersistedItem): MediaItem {
