@@ -145,6 +145,8 @@ class ThumpPlaybackService : MediaLibraryService() {
         return object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val trackId: String? = extractTrackId(mediaItem)
+                Log.d("ThumpRecovery", "onMediaItemTransition reason=" + reason
+                    + " newTrackId=" + extractTrackId(mediaItem))
                 currentScrobbleTrackId = trackId
                 hasSubmittedCurrent = false
                 if (trackId != null) {
@@ -158,6 +160,8 @@ class ThumpPlaybackService : MediaLibraryService() {
                 // Catches the queue-set case where the listener is bound after the player
                 // already has items (restore-on-launch) and the case where the queue is
                 // replaced wholesale without the current track changing identity.
+                Log.d("ThumpRecovery", "onTimelineChanged reason=" + reason
+                    + " itemCount=" + timeline.windowCount)
                 val ignoredTimeline: Timeline = timeline
                 val ignoredReason: Int = reason
                 refreshAudioPrefetchWindow(player)
@@ -262,6 +266,8 @@ class ThumpPlaybackService : MediaLibraryService() {
                         player.prepare()
                         player.playWhenReady = true
                         Log.d("ThumpRecovery", "called prepare() + playWhenReady=true trackId=" + resolvedTrackId)
+                        Log.d("ThumpRecovery", "post-recovery refreshing lookahead trackId=" + resolvedTrackId)
+                        refreshAudioPrefetchWindow(player)
                     }
                 } else {
                     val failureMessage: String
@@ -665,6 +671,10 @@ class ThumpPlaybackService : MediaLibraryService() {
         } else {
             windowEndExclusive = computedEnd.toInt()
         }
+        Log.d("ThumpRecovery", "refreshAudioPrefetchWindow itemCount=" + itemCount
+            + " currentIndex=" + currentIndex
+            + " lookaheadSetting=" + lookaheadSetting
+            + " windowEndExclusive=" + windowEndExclusive)
         val windowTrackIds: HashSet<String> = collectWindowTrackIds(player, currentIndex, windowEndExclusive)
         pruneToastedFailuresOutsideWindow(windowTrackIds)
         launchPrefetchJobsForWindow(thumpDataInstance, player, currentIndex, windowEndExclusive)
@@ -732,11 +742,14 @@ class ThumpPlaybackService : MediaLibraryService() {
         thumpDataInstance: ThumpData,
         trackId: String,
     ): Unit {
+        Log.d("ThumpRecovery", "lookahead consider trackId=" + trackId)
         synchronized(prefetchJobsLock) {
             if (prefetchJobsByTrackId.containsKey(trackId)) {
+                Log.d("ThumpRecovery", "lookahead skip (in-flight) trackId=" + trackId)
                 return
             }
         }
+        Log.d("ThumpRecovery", "lookahead launching trackId=" + trackId)
         val prefetchJob: Job = serviceCoroutineScope.launch {
             try {
                 thumpDataInstance.prefetchAudio(trackId)
