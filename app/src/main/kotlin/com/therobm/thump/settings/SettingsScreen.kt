@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -33,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.therobm.thump.ThumpColors
+import com.therobm.thump.data.BlobStoreStats
 import com.therobm.thump.data.InvalidationSpec
 import com.therobm.thump.data.ThumpData
 import com.therobm.thump.subsonic.SubsonicAuthMode
@@ -285,6 +287,11 @@ fun SettingsScreen(
         SectionDivider()
         SectionHeader(title = "Cache")
 
+        CacheStatsPanel(
+            thumpData = thumpData,
+            cacheCapBytes = audioCacheSizeBytes,
+        )
+
         Text(
             text = "Audio cache size: " + formatBytes(audioCacheSizeBytes),
             color = ThumpColors.OnBackground,
@@ -356,6 +363,116 @@ private fun NormalizeChip(
         onClick = { onSelected(value) },
         label = { Text(text = label) },
     )
+}
+
+/**
+ * Read-only stats over the on-disk blob cache. Fetches once on entry via LaunchedEffect and
+ * re-fetches when the user taps Refresh. Numbers are point-in-time — the panel doesn't tail
+ * eviction or prefetch live; the bug spec says the manual refresh button is the contract.
+ */
+@Composable
+private fun CacheStatsPanel(
+    thumpData: ThumpData,
+    cacheCapBytes: Long,
+) {
+    var stats: BlobStoreStats? by remember { mutableStateOf(null) }
+    var isLoading: Boolean by remember { mutableStateOf(true) }
+    var refreshTrigger: Int by remember { mutableStateOf(0) }
+
+    LaunchedEffect(refreshTrigger) {
+        isLoading = true
+        stats = thumpData.getBlobStoreStats()
+        isLoading = false
+    }
+
+    val currentStats: BlobStoreStats? = stats
+    if (isLoading && currentStats == null) {
+        Text(
+            text = "Loading cache stats…",
+            style = MaterialTheme.typography.bodySmall,
+            color = ThumpColors.TextSecondary,
+        )
+        return
+    }
+    if (currentStats == null) {
+        return
+    }
+
+    val usedText: String = formatBytes(currentStats.totalUsedBytes)
+    val capText: String = formatBytes(cacheCapBytes)
+    Text(
+        text = "Cache used: " + usedText + " / " + capText,
+        color = ThumpColors.OnBackground,
+    )
+
+    val percentFull: Float = computeCachePercentFull(currentStats.totalUsedBytes, cacheCapBytes)
+    LinearProgressIndicator(
+        progress = { percentFull },
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Text(
+        text = "Tracks cached: " + currentStats.audioBlobCount,
+        style = MaterialTheme.typography.bodySmall,
+        color = ThumpColors.TextSecondary,
+    )
+    Text(
+        text = "Cover-art entries: " + currentStats.coverArtBlobCount,
+        style = MaterialTheme.typography.bodySmall,
+        color = ThumpColors.TextSecondary,
+    )
+    Text(
+        text = "Oldest cached: " + formatOldestAccessed(currentStats.oldestAccessedAtEpochMillis),
+        style = MaterialTheme.typography.bodySmall,
+        color = ThumpColors.TextSecondary,
+    )
+
+    Button(
+        enabled = !isLoading,
+        onClick = { refreshTrigger = refreshTrigger + 1 },
+        colors = ButtonDefaults.buttonColors(containerColor = ThumpColors.Surface),
+    ) {
+        Text(text = "Refresh", color = ThumpColors.OnBackground)
+    }
+}
+
+private fun computeCachePercentFull(usedBytes: Long, capBytes: Long): Float {
+    if (capBytes <= 0L) {
+        return 0f
+    }
+    val ratio: Float = usedBytes.toFloat() / capBytes.toFloat()
+    if (ratio < 0f) {
+        return 0f
+    }
+    if (ratio > 1f) {
+        return 1f
+    }
+    return ratio
+}
+
+private fun formatOldestAccessed(oldestAccessedAtEpochMillis: Long): String {
+    if (oldestAccessedAtEpochMillis <= 0L) {
+        return "(cache empty)"
+    }
+    val nowMillis: Long = System.currentTimeMillis()
+    val ageMillis: Long = nowMillis - oldestAccessedAtEpochMillis
+    if (ageMillis < 0L) {
+        return "just now"
+    }
+    val ageSeconds: Long = ageMillis / 1000L
+    if (ageSeconds < 60L) {
+        return ageSeconds.toString() + "s ago"
+    }
+    val ageMinutes: Long = ageSeconds / 60L
+    if (ageMinutes < 60L) {
+        return ageMinutes.toString() + "m ago"
+    }
+    val ageHours: Long = ageMinutes / 60L
+    if (ageHours < 24L) {
+        return ageHours.toString() + "h ago"
+    }
+    val ageDays: Long = ageHours / 24L
+    return ageDays.toString() + "d ago"
 }
 
 private fun formatBytes(bytes: Long): String {
