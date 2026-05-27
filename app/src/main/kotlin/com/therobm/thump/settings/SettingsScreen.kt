@@ -33,7 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.therobm.thump.ThumpColors
-import com.therobm.thump.playback.AudioCacheFactory
+import com.therobm.thump.data.InvalidationSpec
+import com.therobm.thump.data.ThumpData
 import com.therobm.thump.subsonic.SubsonicAuthMode
 import com.therobm.thump.subsonic.SubsonicClient
 import com.therobm.thump.subsonic.SubsonicCredentials
@@ -64,6 +65,7 @@ fun SettingsScreen(
     initialUseTokenAuth: Boolean,
     httpClient: OkHttpClient,
     jsonDecoder: Json,
+    thumpData: ThumpData,
     contentPadding: PaddingValues,
     onCredentialsUpdated: (serverUrl: String, username: String, password: String, useTokenAuth: Boolean, isPulseServer: Boolean) -> Unit,
     modifier: Modifier,
@@ -304,7 +306,7 @@ fun SettingsScreen(
         Button(
             onClick = {
                 coroutineScope.launch {
-                    AudioCacheFactory.clearCache(context.applicationContext)
+                    thumpData.invalidate(InvalidationSpec.EverythingBlobs)
                     clearCacheNoticeText = "Cache cleared."
                 }
             },

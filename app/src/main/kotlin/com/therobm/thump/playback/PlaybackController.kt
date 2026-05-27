@@ -92,11 +92,10 @@ class PlaybackController(applicationContext: Context) {
             rehydratedItems.add(
                 PlaybackQueueItem(
                     trackId = item.trackId,
-                    streamUrl = item.streamUrl,
                     title = item.title,
                     artist = item.artist,
                     album = item.album,
-                    coverArtUrl = item.coverArtUrl,
+                    coverArtId = item.coverArtId,
                 )
             )
         }
@@ -145,7 +144,8 @@ class PlaybackController(applicationContext: Context) {
         val mediaItems = ArrayList<MediaItem>(items.size)
         val itemCount = items.size
         for (itemIndex in 0 until itemCount) {
-            mediaItems.add(MediaItem.fromUri(items[itemIndex].streamUrl))
+            val trackUri: String = "thump://track/" + items[itemIndex].trackId
+            mediaItems.add(MediaItem.fromUri(trackUri))
         }
 
         controller.setMediaItems(mediaItems, safeStartIndex, 0L)
@@ -301,11 +301,10 @@ class PlaybackController(applicationContext: Context) {
             persistedItems.add(
                 PersistedItem(
                     trackId = item.trackId,
-                    streamUrl = item.streamUrl,
                     title = item.title,
                     artist = item.artist,
                     album = item.album,
-                    coverArtUrl = item.coverArtUrl,
+                    coverArtId = item.coverArtId,
                 )
             )
         }
@@ -336,7 +335,7 @@ class PlaybackController(applicationContext: Context) {
             title = item.title,
             artist = item.artist,
             album = item.album,
-            coverArtUrl = item.coverArtUrl,
+            coverArtId = item.coverArtId,
             isPlaying = isPlayingHint,
             source = currentQueueSource,
         )

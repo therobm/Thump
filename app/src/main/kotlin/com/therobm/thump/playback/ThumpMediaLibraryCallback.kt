@@ -74,9 +74,15 @@ private const val CONTENT_STYLE_GROUP_TITLE_HINT_KEY: String = "android.media.br
  */
 class ThumpMediaLibraryCallback(
     private val applicationCoroutineScope: CoroutineScope,
-    private val credentialsLoader: PlaybackCredentialsLoader,
+    applicationContext: android.content.Context,
     private val applicationPackageName: String,
 ) : MediaLibrarySession.Callback {
+
+    // Auto's browse/play tree still resolves through SubsonicClient via PlaybackCredentialsLoader
+    // while the dedicated Auto-over-ThumpData port is queued as a follow-up to #236. The loader
+    // is constructed here rather than passed in so the playback service no longer holds a
+    // PlaybackCredentialsLoader reference.
+    private val credentialsLoader: PlaybackCredentialsLoader = PlaybackCredentialsLoader(applicationContext)
 
     override fun onGetLibraryRoot(
         session: MediaLibrarySession,

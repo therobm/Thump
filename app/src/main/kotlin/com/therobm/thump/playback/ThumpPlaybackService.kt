@@ -5,10 +5,13 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import com.therobm.thump.data.ThumpData
+import com.therobm.thump.data.ThumpDataNotConfigured
 import com.therobm.thump.settings.ThumpSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 private const val POSITION_TICK_INTERVAL_MS: Long = 5000L
 private const val SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS: Long = 4L * 60L * 1000L
@@ -29,6 +33,10 @@ private const val SCROBBLE_SUBMISSION_TIME_THRESHOLD_MS: Long = 4L * 60L * 1000L
  * Resume-on-launch: on onCreate we restore the player's last persisted queue and seek to the
  * saved position before any controller binds, so Auto's now-playing surfaces the resumed
  * track immediately instead of an empty session.
+ *
+ * Audio bytes flow through ThumpData's DataSource implementation. MediaItems carry stable
+ * `thump://track/<id>` URIs; ExoPlayer's MediaSource.Factory is wired to a DataSource.Factory
+ * that returns this process's ThumpData instance.
  */
 class ThumpPlaybackService : MediaLibraryService() {
 
@@ -37,9 +45,6 @@ class ThumpPlaybackService : MediaLibraryService() {
         SupervisorJob() + Dispatchers.IO,
     )
 
-    private val credentialsLoader: PlaybackCredentialsLoader by lazy {
-        PlaybackCredentialsLoader(applicationContext)
-    }
     private val persistence: PlaybackPersistence by lazy {
         PlaybackPersistence(applicationContext)
     }
@@ -51,48 +56,49 @@ class ThumpPlaybackService : MediaLibraryService() {
     private var currentScrobbleTrackId: String? = null
     private var hasSubmittedCurrent: Boolean = false
 
-    private var prefetcher: AudioPrefetcher? = null
-
     // Service-process ThumpData. Per Projects/Thump.md, MediaLibraryService eventually runs in
     // its own process; each process gets its own ThumpData against the shared SQLite WAL +
-    // blob directory. Until process separation is enabled in the manifest, this co-exists with
-    // the UI process's ThumpApplication.thumpData — the SQLite WAL + atomic blob renames make
-    // that safe. Nothing in step 2 routes through this reference yet; later steps (audio path,
-    // browse callbacks) move over from PlaybackCredentialsLoader / SubsonicClient.
+    // blob directory. ExoPlayer reads audio bytes through this instance via the DataSource
+    // interface ThumpData implements.
     private var serviceThumpData: ThumpData? = null
 
     override fun onCreate() {
         super.onCreate()
-        serviceThumpData = ThumpData(applicationContext)
+        val thumpDataForProcess: ThumpData = ThumpData(applicationContext)
+        serviceThumpData = thumpDataForProcess
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
-        val cacheFactory = AudioCacheFactory(applicationContext)
+        val dataSourceFactory: DataSource.Factory = DataSource.Factory {
+            // ExoPlayer's contract permits returning the same DataSource instance — ThumpData
+            // is process-wide and tracks its own per-open state, so handing the singleton back
+            // here is safe.
+            thumpDataForProcess
+        }
+        val mediaSourceFactory: DefaultMediaSourceFactory = DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(dataSourceFactory)
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
-            .setMediaSourceFactory(cacheFactory.buildMediaSourceFactory())
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
 
-        prefetcher = AudioPrefetcher(
-            cacheDataSourceFactory = cacheFactory.buildCacheDataSourceFactory(),
-            scope = serviceCoroutineScope,
-        )
+        // TODO: A ThumpData-side prefetch helper can land in a follow-up bug if cold-cache
+        // playback feels noticeably worse than the prior lookahead behaviour. The architecture
+        // spec allows ThumpData to prefetch internally; surfacing it from the service here
+        // would be a no-op until that helper exists.
 
         player.addListener(buildPlayerListener(player))
 
         val callback = ThumpMediaLibraryCallback(
             applicationCoroutineScope = serviceCoroutineScope,
-            credentialsLoader = credentialsLoader,
+            applicationContext = applicationContext,
             applicationPackageName = applicationContext.packageName,
         )
         librarySession = MediaLibrarySession.Builder(this, player, callback).build()
 
         restorePersistedStateInto(player)
-        // After restore the player carries the resumed queue; kick off lookahead so the user's
-        // next-track when they resume is already on disk.
-        triggerPrefetch(player)
         startPositionPersistenceLoop(player)
     }
 
@@ -101,11 +107,6 @@ class ThumpPlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
-        val activePrefetcher = prefetcher
-        if (activePrefetcher != null) {
-            activePrefetcher.cancelInFlight()
-            prefetcher = null
-        }
         val sessionSnapshot = librarySession
         if (sessionSnapshot != null) {
             // Final position write so the next launch starts where this session ended.
@@ -128,38 +129,8 @@ class ThumpPlaybackService : MediaLibraryService() {
                     fireScrobbleNowPlaying(trackId)
                 }
                 persistCurrentPlayerState(player)
-                triggerPrefetch(player)
             }
         }
-    }
-
-    /**
-     * Collect the post-current stream URLs from the player on the main thread and hand them to
-     * the prefetcher, which downloads them on IO. Called from onCreate (after restore) and from
-     * the Player.Listener (both already on main).
-     */
-    private fun triggerPrefetch(player: Player) {
-        val itemCount = player.mediaItemCount
-        if (itemCount <= 0) {
-            return
-        }
-        val streamUrls = ArrayList<String>(itemCount)
-        for (itemIndex in 0 until itemCount) {
-            val mediaItemAtIndex = player.getMediaItemAt(itemIndex)
-            val localConfig = mediaItemAtIndex.localConfiguration
-            if (localConfig == null) {
-                streamUrls.add("")
-            } else {
-                streamUrls.add(localConfig.uri.toString())
-            }
-        }
-        val currentIndex: Int = player.currentMediaItemIndex
-        val activePrefetcher: AudioPrefetcher? = prefetcher
-        if (activePrefetcher == null) {
-            return
-        }
-        val lookahead: Int = settings.getPrefetchLookahead()
-        activePrefetcher.startPrefetch(streamUrls, currentIndex, lookahead)
     }
 
     private fun restorePersistedStateInto(player: Player) {
@@ -203,13 +174,14 @@ class ThumpPlaybackService : MediaLibraryService() {
         if (item.album != null) {
             metadataBuilder.setAlbumTitle(item.album)
         }
-        val coverArtUrl = item.coverArtUrl
-        if (coverArtUrl != null) {
-            metadataBuilder.setArtworkUri(android.net.Uri.parse(coverArtUrl))
-        }
+        // Lock-screen / notification artwork is intentionally not set here — the in-app mini
+        // player and Now Playing screen render cover art via ArtImage from ThumpData. Setting
+        // setArtworkUri for system surfaces (content:// ContentProvider URIs) is part of the
+        // Android Auto port follow-up, which uses the cover-art ContentProvider end-to-end.
+        val trackUri: String = "thump://track/" + item.trackId
         return MediaItem.Builder()
             .setMediaId("thump-track/" + item.trackId)
-            .setUri(item.streamUrl)
+            .setUri(trackUri)
             .setMediaMetadata(metadataBuilder.build())
             .build()
     }
@@ -270,12 +242,19 @@ class ThumpPlaybackService : MediaLibraryService() {
         if (!settings.getScrobbleEnabled()) {
             return
         }
+        val thumpDataInstance: ThumpData? = serviceThumpData
+        if (thumpDataInstance == null) {
+            return
+        }
+        val firedAtEpochMillis: Long = System.currentTimeMillis()
         serviceCoroutineScope.launch {
-            val client = credentialsLoader.loadSubsonicClient()
-            if (client == null) {
-                return@launch
+            try {
+                thumpDataInstance.scrobble(trackId, firedAtEpochMillis, false)
+            } catch (scrobbleFailure: IOException) {
+                // Best-effort signal — server unreachable or offline mode rejected the call.
+            } catch (notConfigured: ThumpDataNotConfigured) {
+                // No server configured yet — nothing to scrobble to.
             }
-            client.scrobble(trackId, submission = false)
         }
     }
 
@@ -283,12 +262,19 @@ class ThumpPlaybackService : MediaLibraryService() {
         if (!settings.getScrobbleEnabled()) {
             return
         }
+        val thumpDataInstance: ThumpData? = serviceThumpData
+        if (thumpDataInstance == null) {
+            return
+        }
+        val firedAtEpochMillis: Long = System.currentTimeMillis()
         serviceCoroutineScope.launch {
-            val client = credentialsLoader.loadSubsonicClient()
-            if (client == null) {
-                return@launch
+            try {
+                thumpDataInstance.scrobble(trackId, firedAtEpochMillis, true)
+            } catch (scrobbleFailure: IOException) {
+                // Best-effort signal — server unreachable or offline mode rejected the call.
+            } catch (notConfigured: ThumpDataNotConfigured) {
+                // No server configured yet — nothing to scrobble to.
             }
-            client.scrobble(trackId, submission = true)
         }
     }
 
@@ -299,11 +285,11 @@ class ThumpPlaybackService : MediaLibraryService() {
             return
         }
         val previous = persistence.load()
-        // We need title/artist/album/streamUrl/coverArtUrl to round-trip. The player only knows
-        // titles via MediaMetadata; streamUrl and coverArtUrl are held in the previously
-        // persisted blob (or were just written by the app's PlaybackController on playQueue).
-        // Fall back to whatever's there; the player's setMediaItems was driven by that blob in
-        // the first place when the service restored.
+        // We need title/artist/album/trackId/coverArtId to round-trip. The player only knows
+        // titles via MediaMetadata; trackId and coverArtId are held in the previously persisted
+        // blob (or were just written by the app's PlaybackController on playQueue). Fall back to
+        // whatever's there; the player's setMediaItems was driven by that blob in the first
+        // place when the service restored.
         if (previous == null) {
             // No prior blob means the app called playQueue before we ran. PlaybackController
             // wrote the blob then; we shouldn't be here without one, but guard anyway.

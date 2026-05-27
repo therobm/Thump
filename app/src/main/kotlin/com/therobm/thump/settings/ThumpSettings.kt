@@ -8,9 +8,8 @@ import android.content.SharedPreferences
  *
  * Owns the settings the user can change from the Settings screen — playback behaviour, cache
  * sizing, scrobble opt-out, etc. The credentials (URL / username / password / auth mode) live
- * in a separate prefs file managed by MainActivity + PlaybackCredentialsLoader because the
- * playback service reads them from a different process and we want them isolated from UI
- * settings churn.
+ * in a separate prefs file managed by MainActivity and the playback service so they stay
+ * isolated from UI settings churn.
  *
  * Reads default to the spec defaults so a clean install matches the spec exactly with no
  * extra setup.

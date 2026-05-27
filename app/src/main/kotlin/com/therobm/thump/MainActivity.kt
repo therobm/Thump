@@ -112,9 +112,6 @@ private const val ROUTE_PLAYLIST_PATTERN = "playlist/{$NAV_ARG_PLAYLIST_ID}"
 private const val ROUTE_ARTIST_PATTERN = "artist/{$NAV_ARG_ARTIST_ID}"
 private const val ROUTE_GENRE_PATTERN = "genre/{$NAV_ARG_GENRE_NAME}"
 
-private const val MINI_PLAYER_ART_REQUEST_SIZE: Int = 150
-private const val QUEUE_ITEM_ART_REQUEST_SIZE_PX: Int = 200
-
 private fun buildAlbumRoute(albumId: String): String {
     return "album/" + albumId
 }
@@ -194,14 +191,13 @@ private fun ThumpApp() {
         }
 
         // Wraps the list-of-Track callback the detail screens emit. The screens no longer build
-        // PlaybackQueueItems themselves; MainActivity walks the domain Track list, calls the
-        // legacy SubsonicClient URL builders, and hands the assembled queue to PlaybackController.
-        // This goes away once the audio path is ported to ThumpData (a follow-up).
+        // PlaybackQueueItems themselves; MainActivity walks the domain Track list and hands the
+        // assembled queue to PlaybackController. Audio bytes and cover art are resolved through
+        // ThumpData by id, so no URL construction happens here.
         val onPlayTracks: (List<Track>, Int, PlaybackSource?) -> Unit = {
             tracks: List<Track>, startIndex: Int, source: PlaybackSource? ->
-            val currentSubsonicClient: SubsonicClient? = subsonicClient
-            if (currentSubsonicClient != null && tracks.isNotEmpty()) {
-                val queueItems: List<PlaybackQueueItem> = buildQueueItemsFromTracks(tracks, currentSubsonicClient)
+            if (tracks.isNotEmpty()) {
+                val queueItems: List<PlaybackQueueItem> = buildQueueItemsFromTracks(tracks)
                 playbackController.playQueue(queueItems, startIndex, source)
             }
         }
@@ -222,35 +218,25 @@ private fun ThumpApp() {
         }
 
         val onHomeItemTapped: (HomeCarouselItem) -> Unit = { tappedItem: HomeCarouselItem ->
-            if (subsonicClient != null) {
-                when (tappedItem.kind) {
-                    HomeItemKind.Track -> {
-                        val tappedCoverArtUrl: String?
-                        val tappedCoverArtId = tappedItem.coverArtId
-                        if (tappedCoverArtId == null) {
-                            tappedCoverArtUrl = null
-                        } else {
-                            tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
-                        }
-                        val singleItem = PlaybackQueueItem(
-                            trackId = tappedItem.id,
-                            streamUrl = subsonicClient.buildStreamUrl(tappedItem.id),
-                            title = tappedItem.title,
-                            artist = tappedItem.subtitle,
-                            album = null,
-                            coverArtUrl = tappedCoverArtUrl,
-                        )
-                        playbackController.playQueue(listOf(singleItem), 0, null)
-                    }
-                    HomeItemKind.Album -> {
-                        navController.navigate(buildAlbumRoute(tappedItem.id))
-                    }
-                    HomeItemKind.Playlist -> {
-                        navController.navigate(buildPlaylistRoute(tappedItem.id))
-                    }
-                    HomeItemKind.Artist -> {
-                        navController.navigate(buildArtistRoute(tappedItem.id))
-                    }
+            when (tappedItem.kind) {
+                HomeItemKind.Track -> {
+                    val singleItem: PlaybackQueueItem = PlaybackQueueItem(
+                        trackId = tappedItem.id,
+                        title = tappedItem.title,
+                        artist = tappedItem.subtitle,
+                        album = null,
+                        coverArtId = tappedItem.coverArtId,
+                    )
+                    playbackController.playQueue(listOf(singleItem), 0, null)
+                }
+                HomeItemKind.Album -> {
+                    navController.navigate(buildAlbumRoute(tappedItem.id))
+                }
+                HomeItemKind.Playlist -> {
+                    navController.navigate(buildPlaylistRoute(tappedItem.id))
+                }
+                HomeItemKind.Artist -> {
+                    navController.navigate(buildArtistRoute(tappedItem.id))
                 }
             }
         }
@@ -272,6 +258,7 @@ private fun ThumpApp() {
                 if (currentRoute != ROUTE_NOW_PLAYING) {
                     BottomBarStack(
                         nowPlaying = nowPlaying,
+                        thumpData = thumpData,
                         currentRoute = currentRoute,
                         navController = navController,
                         playbackController = playbackController,
@@ -337,13 +324,6 @@ private fun ThumpApp() {
                                 navController.navigate(buildAlbumRoute(albumId))
                             },
                             onTrackSelected = { tappedTrack: Track ->
-                                val tappedCoverArtUrl: String?
-                                val tappedCoverArtId: String? = tappedTrack.coverArtId
-                                if (tappedCoverArtId == null) {
-                                    tappedCoverArtUrl = null
-                                } else {
-                                    tappedCoverArtUrl = subsonicClient.buildCoverArtUrl(tappedCoverArtId, MINI_PLAYER_ART_REQUEST_SIZE)
-                                }
                                 val tappedArtistText: String
                                 val tappedArtistName: String? = tappedTrack.artistName
                                 if (tappedArtistName == null) {
@@ -353,11 +333,10 @@ private fun ThumpApp() {
                                 }
                                 val singleItem: PlaybackQueueItem = PlaybackQueueItem(
                                     trackId = tappedTrack.trackId,
-                                    streamUrl = subsonicClient.buildStreamUrl(tappedTrack.trackId),
                                     title = tappedTrack.title,
                                     artist = tappedArtistText,
                                     album = tappedTrack.albumName,
-                                    coverArtUrl = tappedCoverArtUrl,
+                                    coverArtId = tappedTrack.coverArtId,
                                 )
                                 onPlayQueue(listOf(singleItem), 0, null)
                             },
@@ -466,6 +445,7 @@ private fun ThumpApp() {
                 composable(ROUTE_NOW_PLAYING) {
                     NowPlayingScreen(
                         nowPlaying = nowPlaying,
+                        thumpData = thumpData,
                         playbackController = playbackController,
                         onBackPressed = { navController.popBackStack() },
                         contentPadding = innerPadding,
@@ -480,6 +460,7 @@ private fun ThumpApp() {
                         initialUseTokenAuth = useTokenAuth,
                         httpClient = httpClient,
                         jsonDecoder = jsonDecoder,
+                        thumpData = thumpData,
                         contentPadding = innerPadding,
                         onCredentialsUpdated = { newServerUrl: String, newUsername: String, newPassword: String, newUseTokenAuth: Boolean, detectedIsPulse: Boolean ->
                             serverUrl = newServerUrl
@@ -525,6 +506,7 @@ private fun ConfigurePrompt(contentPadding: PaddingValues) {
 @Composable
 private fun BottomBarStack(
     nowPlaying: NowPlaying?,
+    thumpData: ThumpData,
     currentRoute: String?,
     navController: NavController,
     playbackController: PlaybackController,
@@ -533,6 +515,7 @@ private fun BottomBarStack(
         if (nowPlaying != null) {
             MiniPlayer(
                 nowPlaying = nowPlaying,
+                thumpData = thumpData,
                 onPlayPauseClicked = {
                     if (nowPlaying.isPlaying) {
                         playbackController.pause()
@@ -652,26 +635,16 @@ private fun buildJsonDecoder(): Json {
 }
 
 /**
- * Walk a list of domain Tracks and build PlaybackQueueItems for each, using the legacy
- * SubsonicClient URL builders. Detail screens emit `List<Track>` callbacks; MainActivity does
- * the URL assembly here so the screens never see a SubsonicClient. Goes away once the audio
- * path moves through ThumpData.
+ * Walk a list of domain Tracks and build PlaybackQueueItems for each. Detail screens emit
+ * `List<Track>` callbacks; MainActivity reshapes them into queue items here so the screens stay
+ * agnostic of the playback layer. Audio bytes and cover art are resolved by id through
+ * ThumpData — no URL construction at any point in the in-app playback path.
  */
-private fun buildQueueItemsFromTracks(
-    tracks: List<Track>,
-    subsonicClient: SubsonicClient,
-): List<PlaybackQueueItem> {
+private fun buildQueueItemsFromTracks(tracks: List<Track>): List<PlaybackQueueItem> {
     val queueItems: ArrayList<PlaybackQueueItem> = ArrayList<PlaybackQueueItem>(tracks.size)
     val trackCount: Int = tracks.size
     for (trackIndex in 0 until trackCount) {
         val track: Track = tracks[trackIndex]
-        val coverArtUrl: String?
-        val coverArtId: String? = track.coverArtId
-        if (coverArtId == null) {
-            coverArtUrl = null
-        } else {
-            coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, QUEUE_ITEM_ART_REQUEST_SIZE_PX)
-        }
         val artistText: String
         val trackArtistName: String? = track.artistName
         if (trackArtistName == null) {
@@ -682,11 +655,10 @@ private fun buildQueueItemsFromTracks(
         queueItems.add(
             PlaybackQueueItem(
                 trackId = track.trackId,
-                streamUrl = subsonicClient.buildStreamUrl(track.trackId),
                 title = track.title,
                 artist = artistText,
                 album = track.albumName,
-                coverArtUrl = coverArtUrl,
+                coverArtId = track.coverArtId,
             )
         )
     }
@@ -715,13 +687,6 @@ private suspend fun startPlaylistPlaybackUsingSubsonicClient(
     val songCount: Int = songs.size
     for (songIndex in 0 until songCount) {
         val song: StandardSongDetail = songs[songIndex]
-        val coverArtUrl: String?
-        val coverArtId: String? = song.coverArt
-        if (coverArtId == null) {
-            coverArtUrl = null
-        } else {
-            coverArtUrl = subsonicClient.buildCoverArtUrl(coverArtId, QUEUE_ITEM_ART_REQUEST_SIZE_PX)
-        }
         val artistText: String
         val songArtist: String? = song.artist
         if (songArtist == null) {
@@ -732,11 +697,10 @@ private suspend fun startPlaylistPlaybackUsingSubsonicClient(
         queue.add(
             PlaybackQueueItem(
                 trackId = song.id,
-                streamUrl = subsonicClient.buildStreamUrl(song.id),
                 title = song.title,
                 artist = artistText,
                 album = song.album,
-                coverArtUrl = coverArtUrl,
+                coverArtId = song.coverArt,
             )
         )
     }

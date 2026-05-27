@@ -470,7 +470,24 @@ class ThumpData(
     // -- internals -----------------------------------------------------------------------------
 
     private fun parseTrackIdFromUri(uri: Uri): String {
+        // TODO(Flatline #243): Transitional bridge for legacy Android Auto playback.
+        // ThumpMediaLibraryCallback still constructs http(s)://<host>/rest/stream?id=<trackId>
+        // MediaItem URIs via the pre-#236 SubsonicClient path. Accept that shape here until
+        // the Auto callback ports to ThumpData (separate larger follow-up bug). Delete this
+        // bridge once only thump://track/<id> URIs reach open().
         val scheme: String? = uri.scheme
+        if (scheme == "http" || scheme == "https")
+        {
+            val legacyPath: String? = uri.path
+            if (legacyPath != null && legacyPath.endsWith("/rest/stream"))
+            {
+                val legacyTrackId: String? = uri.getQueryParameter("id")
+                if (legacyTrackId != null)
+                {
+                    return legacyTrackId
+                }
+            }
+        }
         if (scheme != "thump") {
             throw IOException(
                 "ThumpData.open expected a thump://track/<id> URI; got scheme=" + scheme
