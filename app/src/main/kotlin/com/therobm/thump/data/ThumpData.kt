@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -727,6 +728,7 @@ class ThumpData(
         val existingFile: File? = withContext(Dispatchers.IO) {
             blobStore.openBlobFile(cacheKey)
         }
+        Log.d("ThumpRecovery", "prefetchAudio entry trackId=" + trackId + " cacheKey=" + cacheKey + " alreadyCached=" + (existingFile != null))
         if (existingFile != null) {
             return
         }
@@ -758,6 +760,7 @@ class ThumpData(
      * directory.
      */
     private suspend fun executePrefetchDownload(trackId: String): Unit {
+        Log.d("ThumpRecovery", "executePrefetchDownload start trackId=" + trackId)
         val cacheKey: String = ThumpBlobStore.trackBlobKey(trackId)
         val protocol: IProtocol = ensureActiveProtocol()
         val streamResponse: AudioStreamResponse = protocol.openAudioStream(trackId)
@@ -773,6 +776,7 @@ class ThumpData(
                     trackId = trackId,
                 )
             }
+            Log.d("ThumpRecovery", "executePrefetchDownload commit trackId=" + trackId + " bytes=" + totalBytesWritten)
             withContext(Dispatchers.IO) {
                 blobStore.commitTemporaryBlobFile(
                     handle = temporaryHandle,

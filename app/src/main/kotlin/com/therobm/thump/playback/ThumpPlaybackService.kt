@@ -1,6 +1,7 @@
 package com.therobm.thump.playback
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -163,6 +164,14 @@ class ThumpPlaybackService : MediaLibraryService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val cause: Throwable? = error.cause
+                val causeClassName: String
+                if (cause == null) {
+                    causeClassName = "null"
+                } else {
+                    causeClassName = cause.javaClass.name
+                }
+                Log.d("ThumpRecovery", "onPlayerError fired: errorCode=" + error.errorCode + " message=" + error.message + " causeClass=" + causeClassName)
                 handleCacheMissPlayerError(player, error)
             }
         }
@@ -192,6 +201,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         error: PlaybackException,
     ): Unit {
         val matchedTrackId: String? = extractCacheMissTrackId(error)
+        Log.d("ThumpRecovery", "extractCacheMissTrackId result: " + matchedTrackId)
         if (matchedTrackId == null) {
             return
         }
@@ -209,6 +219,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         if (thumpDataInstance == null) {
             return
         }
+        Log.d("ThumpRecovery", "launching recovery for trackId=" + resolvedTrackId)
         serviceCoroutineScope.launch {
             withContext(Dispatchers.Main) {
                 broadcastUnavailableReason(
@@ -216,17 +227,23 @@ class ThumpPlaybackService : MediaLibraryService() {
                     PlaybackController.UNAVAILABLE_REASON_LOADING,
                 )
             }
+            Log.d("ThumpRecovery", "broadcast LOADING for trackId=" + resolvedTrackId + ", about to call prefetchAudio")
             var prefetchSucceeded: Boolean = false
             var prefetchFailureReason: String? = null
             try {
+                Log.d("ThumpRecovery", "calling prefetchAudio trackId=" + resolvedTrackId)
                 thumpDataInstance.prefetchAudio(resolvedTrackId)
+                Log.d("ThumpRecovery", "prefetchAudio returned success trackId=" + resolvedTrackId)
                 prefetchSucceeded = true
             } catch (cancellation: CancellationException) {
+                Log.d("ThumpRecovery", "prefetchAudio threw " + cancellation.javaClass.simpleName + ": " + cancellation.message + " trackId=" + resolvedTrackId)
                 throw cancellation
             } catch (notConfigured: ThumpDataNotConfigured) {
+                Log.d("ThumpRecovery", "prefetchAudio threw " + notConfigured.javaClass.simpleName + ": " + notConfigured.message + " trackId=" + resolvedTrackId)
                 val ignoredNotConfigured: ThumpDataNotConfigured = notConfigured
                 prefetchFailureReason = PlaybackController.UNAVAILABLE_REASON_NOT_CONFIGURED
             } catch (cacheMissOrTransport: IOException) {
+                Log.d("ThumpRecovery", "prefetchAudio threw " + cacheMissOrTransport.javaClass.simpleName + ": " + cacheMissOrTransport.message + " trackId=" + resolvedTrackId)
                 prefetchFailureReason = classifyRestoreIoFailure(cacheMissOrTransport)
             }
             withContext(Dispatchers.Main) {
@@ -237,8 +254,10 @@ class ThumpPlaybackService : MediaLibraryService() {
                         // Bytes are on disk now — re-trigger the load. Re-assert playWhenReady so
                         // the player actually resumes instead of sitting in a prepared-but-paused
                         // state, then clear the loading banner so the UI returns to normal.
+                        Log.d("ThumpRecovery", "calling player.prepare() trackId=" + resolvedTrackId + " stillCurrent=" + (stillCurrentTrackId == resolvedTrackId))
                         player.prepare()
                         player.playWhenReady = true
+                        Log.d("ThumpRecovery", "set playWhenReady=true trackId=" + resolvedTrackId)
                         broadcastUnavailableReasonClear(resolvedTrackId)
                     }
                 } else {
@@ -271,6 +290,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         failedTrackId: String,
         failureMessage: String,
     ): Unit {
+        Log.d("ThumpRecovery", "auto-advance from failedTrackId=" + failedTrackId + " itemCount=" + player.mediaItemCount + " currentIndex=" + player.currentMediaItemIndex)
         val thumpDataInstance: ThumpData? = serviceThumpData
         if (thumpDataInstance == null) {
             haltOnUnplayable(player, failedTrackId, failureMessage)
@@ -287,6 +307,7 @@ class ThumpPlaybackService : MediaLibraryService() {
             }
             val isCached: Boolean = thumpDataInstance.isAudioBlobCached(candidateTrackId)
             if (isCached) {
+                Log.d("ThumpRecovery", "auto-advance seeking to index=" + candidateIndex + " trackId=" + candidateTrackId)
                 player.seekTo(candidateIndex, 0L)
                 seekedToIndex = candidateIndex
                 break
@@ -303,6 +324,7 @@ class ThumpPlaybackService : MediaLibraryService() {
         failedTrackId: String,
         failureMessage: String,
     ): Unit {
+        Log.d("ThumpRecovery", "halt on unplayable trackId=" + failedTrackId + " reason=" + failureMessage)
         player.playWhenReady = false
         val shouldToast: Boolean
         if (toastedFailureTrackIds.contains(failedTrackId)) {
