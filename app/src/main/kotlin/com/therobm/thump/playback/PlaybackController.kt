@@ -187,7 +187,12 @@ class PlaybackController(applicationContext: Context, thumpData: ThumpData) {
         val itemCount: Int = items.size
         for (itemIndex in 0 until itemCount) {
             val trackUri: String = "thump://track/" + items[itemIndex].trackId
-            mediaItems.add(MediaItem.fromUri(trackUri))
+            val mediaItemId: String = "thump-track/" + items[itemIndex].trackId
+            val mediaItem: MediaItem = MediaItem.Builder()
+                .setMediaId(mediaItemId)
+                .setUri(trackUri)
+                .build()
+            mediaItems.add(mediaItem)
         }
 
         // Persist immediately so a cold launch on Auto picks up the same state even if the
