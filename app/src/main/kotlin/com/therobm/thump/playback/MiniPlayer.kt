@@ -3,7 +3,6 @@ package com.therobm.thump.playback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,8 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
+import com.therobm.thump.art.ArtImage
+import com.therobm.thump.data.ThumpData
+
+private const val MINI_PLAYER_ART_REQUEST_SIZE_PX: Int = 150
 
 /**
  * Bar pinned above the bottom navigation that shows whatever is currently loaded into the
@@ -36,6 +38,7 @@ import com.therobm.thump.ThumpColors
 @Composable
 fun MiniPlayer(
     nowPlaying: NowPlaying,
+    thumpData: ThumpData,
     onPlayPauseClicked: () -> Unit,
     onExpandClicked: () -> Unit,
 ) {
@@ -48,19 +51,17 @@ fun MiniPlayer(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val artModifier = Modifier
+        val artModifier: Modifier = Modifier
             .size(48.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(ThumpColors.Surface)
-        if (nowPlaying.coverArtUrl == null) {
-            Box(modifier = artModifier)
-        } else {
-            AsyncImage(
-                model = nowPlaying.coverArtUrl,
-                contentDescription = null,
-                modifier = artModifier,
-            )
-        }
+        ArtImage(
+            thumpData = thumpData,
+            artId = nowPlaying.coverArtId,
+            sizePx = MINI_PLAYER_ART_REQUEST_SIZE_PX,
+            contentDescription = null,
+            modifier = artModifier,
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Text(

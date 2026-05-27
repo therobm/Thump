@@ -20,11 +20,10 @@ data class PersistedPlaybackState(
 @Serializable
 data class PersistedItem(
     val trackId: String,
-    val streamUrl: String,
     val title: String,
     val artist: String,
     val album: String?,
-    val coverArtUrl: String?,
+    val coverArtId: String?,
 )
 
 @Serializable

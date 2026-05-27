@@ -41,8 +41,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.therobm.thump.ThumpColors
+import com.therobm.thump.art.ArtImage
+import com.therobm.thump.data.ThumpData
 import com.therobm.thump.playback.NowPlaying
 import com.therobm.thump.playback.PlaybackController
 import com.therobm.thump.playback.PlaybackSource
@@ -53,6 +54,7 @@ import kotlinx.coroutines.isActive
 private const val POSITION_POLL_INTERVAL_MS: Long = 500L
 private const val LARGE_PLAY_BUTTON_SIZE_DP: Int = 72
 private const val SIDE_TRANSPORT_BUTTON_SIZE_DP: Int = 56
+private const val NOW_PLAYING_ART_REQUEST_SIZE_PX: Int = 600
 
 /**
  * The full-screen Now Playing view. Reached by tapping the mini player.
@@ -67,6 +69,7 @@ private const val SIDE_TRANSPORT_BUTTON_SIZE_DP: Int = 56
 @Composable
 fun NowPlayingScreen(
     nowPlaying: NowPlaying?,
+    thumpData: ThumpData,
     playbackController: PlaybackController,
     onBackPressed: () -> Unit,
     contentPadding: PaddingValues,
@@ -115,19 +118,17 @@ fun NowPlayingScreen(
                 .aspectRatio(1f),
             contentAlignment = Alignment.Center,
         ) {
-            val artModifier = Modifier
+            val artModifier: Modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(12.dp))
                 .background(ThumpColors.Surface)
-            if (nowPlaying.coverArtUrl == null) {
-                Box(modifier = artModifier)
-            } else {
-                AsyncImage(
-                    model = nowPlaying.coverArtUrl,
-                    contentDescription = null,
-                    modifier = artModifier,
-                )
-            }
+            ArtImage(
+                thumpData = thumpData,
+                artId = nowPlaying.coverArtId,
+                sizePx = NOW_PLAYING_ART_REQUEST_SIZE_PX,
+                contentDescription = null,
+                modifier = artModifier,
+            )
         }
 
         // Flexible space between art (top) and the rest (bottom-anchored).
