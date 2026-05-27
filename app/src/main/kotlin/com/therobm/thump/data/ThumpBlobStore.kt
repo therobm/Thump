@@ -320,6 +320,56 @@ class ThumpBlobStore(
         )
     }
 
+    /**
+     * Read-only stats over the `blobs` table for the Settings cache panel. Uses three separate
+     * aggregate queries (rather than one with `FILTER (WHERE ...)`) so this stays compatible
+     * with the SQLite version shipped by older Android API levels. The numbers are a point-in-
+     * time snapshot; the panel re-fetches on entry and on a manual refresh.
+     */
+    fun getStats(): BlobStoreStats {
+        val readableDatabase: SQLiteDatabase = database.readableDatabase
+        val totalUsedBytes: Long = readTotalBlobBytes(readableDatabase)
+        val audioBlobCount: Int = readBlobCountWithKeyPrefix(readableDatabase, "track:%")
+        val coverArtBlobCount: Int = readBlobCountWithKeyPrefix(readableDatabase, "coverArt:%")
+        val oldestAccessedAtEpochMillis: Long = readOldestAccessedAtEpochMillis(readableDatabase)
+        return BlobStoreStats(
+            totalUsedBytes = totalUsedBytes,
+            audioBlobCount = audioBlobCount,
+            coverArtBlobCount = coverArtBlobCount,
+            oldestAccessedAtEpochMillis = oldestAccessedAtEpochMillis,
+        )
+    }
+
+    private fun readBlobCountWithKeyPrefix(readableDatabase: SQLiteDatabase, likePattern: String): Int {
+        val cursor: Cursor = readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM blobs WHERE blob_key LIKE ?",
+            arrayOf<String>(likePattern),
+        )
+        try {
+            if (!cursor.moveToFirst()) {
+                return 0
+            }
+            return cursor.getInt(0)
+        } finally {
+            cursor.close()
+        }
+    }
+
+    private fun readOldestAccessedAtEpochMillis(readableDatabase: SQLiteDatabase): Long {
+        val cursor: Cursor = readableDatabase.rawQuery(
+            "SELECT IFNULL(MIN(last_accessed_at_epoch_millis), 0) FROM blobs",
+            arrayOf<String>(),
+        )
+        try {
+            if (!cursor.moveToFirst()) {
+                return 0L
+            }
+            return cursor.getLong(0)
+        } finally {
+            cursor.close()
+        }
+    }
+
     private fun enforceLruCap(writableDatabase: SQLiteDatabase): Unit {
         val capBytes: Long = cacheSizeBytesProvider()
         val totalBytesAtStart: Long = readTotalBlobBytes(writableDatabase)

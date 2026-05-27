@@ -219,6 +219,16 @@ class ThumpData(
         }
     }
 
+    /**
+     * Read-only snapshot of the on-disk blob store for the Settings cache panel. Disk-bound
+     * aggregate queries, so it hops to `Dispatchers.IO`.
+     */
+    suspend fun getBlobStoreStats(): BlobStoreStats {
+        return withContext(Dispatchers.IO) {
+            blobStore.getStats()
+        }
+    }
+
     // -- Browsing ------------------------------------------------------------------------------
 
     suspend fun getAllArtists(): List<Artist> {
