@@ -21,7 +21,7 @@ namespace Thump
 	{
 		public static MainView Self { get { return s_self; } }
 		public static ThumpData Data { get { return Self.m_data; } }
-
+		
 		private static MainView s_self;
 		private PulseClient m_pulseClient;
 		private ThumpCache m_cache;
@@ -67,7 +67,9 @@ namespace Thump
 
 			Content = m_rootGrid;
 
-			m_pulseClient = new PulseClient("https://192.168.5.5:32458", "Rob");
+			m_pulseClient = new PulseClient();
+			m_pulseClient.SetServerParams("192.168.5.5","32458", "Rob", "asdf", PulseClient.eSubSonicAuthType.Token, true);
+
 			string cacheRoot = FileSystem.CacheDirectory;
 			string databasePath = Path.Combine(cacheRoot, "thump.db");
 			string blobDirectory = Path.Combine(cacheRoot, "blobs");
@@ -98,11 +100,10 @@ namespace Thump
 			NavigateToHome();
 		}
 
-		public void OnPulseDataChanged() 
+		public ThumpCache GetCache()
 		{
-			//todo go tell any active views they should refresh themselves
+			return m_cache;
 		}
-
 		public void NavigateToHome()
 		{
 			m_activeTab = eTab.Home;

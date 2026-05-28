@@ -8,6 +8,14 @@ using Thump.Pulse;
 
 namespace Thump.Data
 {
+	public class ThumpCacheStats
+	{
+		public long BytesUsed;
+		public int TrackCount;
+		public int CoverArtCount;
+		public long OldestFetchedUnix;
+	}
+
 	public class ThumpCache
 	{
 		private SqliteConnection m_connection;
@@ -15,6 +23,7 @@ namespace Thump.Data
 		private BlockingCollection<Action> m_queue = new BlockingCollection<Action>();
 		private string m_connectionString;
 		private string m_blobDirectory;
+		private long m_sizeLimitBytes;
 
 		public ThumpCache(string databasePath, string blobDirectory)
 		{
@@ -195,6 +204,143 @@ namespace Thump.Data
 				cmd.Parameters.AddWithValue("$f", now);
 				cmd.Parameters.AddWithValue("$a", now);
 				cmd.ExecuteNonQuery();
+			}
+			TrimToLimit();
+		}
+
+		public ThumpCacheStats GetCacheStats()
+		{
+			ThumpCacheStats stats = new ThumpCacheStats();
+
+			long pageCount;
+			long pageSize;
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "PRAGMA page_count;";
+				pageCount = Convert.ToInt64(cmd.ExecuteScalar());
+			}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "PRAGMA page_size;";
+				pageSize = Convert.ToInt64(cmd.ExecuteScalar());
+			}
+			long blobBytes;
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COALESCE(SUM(size_bytes), 0) FROM blobs";
+				blobBytes = Convert.ToInt64(cmd.ExecuteScalar());
+			}
+			stats.BytesUsed = (pageCount * pageSize) + blobBytes;
+
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COUNT(*) FROM tracks";
+				stats.TrackCount = Convert.ToInt32(cmd.ExecuteScalar());
+			}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COUNT(*) FROM blobs WHERE content_type LIKE 'image/%'";
+				stats.CoverArtCount = Convert.ToInt32(cmd.ExecuteScalar());
+			}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COALESCE(MIN(fetched_at), 0) FROM (SELECT fetched_at FROM tracks WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM albums WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM artists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM playlists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM blobs WHERE fetched_at > 0)";
+				stats.OldestFetchedUnix = Convert.ToInt64(cmd.ExecuteScalar());
+			}
+			return stats;
+		}
+
+		public void ClearCache()
+		{
+			List<string> filePaths = new List<string>();
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT file_path FROM blobs";
+				using (SqliteDataReader reader = cmd.ExecuteReader())
+				{
+					while (reader.Read())
+					{
+						filePaths.Add(reader.GetString(0));
+					}
+				}
+			}
+			for (int idx = 0; idx < filePaths.Count; idx++)
+			{
+				if (File.Exists(filePaths[idx]))
+				{
+					File.Delete(filePaths[idx]);
+				}
+			}
+			string[] tables = new string[] { "blobs", "album_tracks", "playlist_tracks", "tracks", "albums", "playlists", "artists" };
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
+			{
+				for (int idx = 0; idx < tables.Length; idx++)
+				{
+					using (SqliteCommand cmd = m_connection.CreateCommand())
+					{
+						cmd.Transaction = tx;
+						cmd.CommandText = "DELETE FROM " + tables[idx];
+						cmd.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
+			}
+		}
+
+		public void SetSizeLimitBytes(long limitBytes)
+		{
+			m_sizeLimitBytes = limitBytes;
+		}
+
+		private void TrimToLimit()
+		{
+			if (m_sizeLimitBytes <= 0)
+			{
+				return;
+			}
+			long total;
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COALESCE(SUM(size_bytes), 0) FROM blobs";
+				total = Convert.ToInt64(cmd.ExecuteScalar());
+			}
+			if (total <= m_sizeLimitBytes)
+			{
+				return;
+			}
+			List<string> keys = new List<string>();
+			List<string> paths = new List<string>();
+			List<long> sizes = new List<long>();
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT blob_key, file_path, size_bytes FROM blobs ORDER BY last_accessed ASC";
+				using (SqliteDataReader reader = cmd.ExecuteReader())
+				{
+					while (reader.Read())
+					{
+						keys.Add(reader.GetString(0));
+						paths.Add(reader.GetString(1));
+						sizes.Add(reader.GetInt64(2));
+					}
+				}
+			}
+			for (int idx = 0; idx < keys.Count; idx++)
+			{
+				if (total <= m_sizeLimitBytes)
+				{
+					return;
+				}
+				if (File.Exists(paths[idx]))
+				{
+					File.Delete(paths[idx]);
+				}
+				using (SqliteCommand cmd = m_connection.CreateCommand())
+				{
+					cmd.CommandText = "DELETE FROM blobs WHERE blob_key = $k";
+					cmd.Parameters.AddWithValue("$k", keys[idx]);
+					cmd.ExecuteNonQuery();
+				}
+				total = total - sizes[idx];
 			}
 		}
 

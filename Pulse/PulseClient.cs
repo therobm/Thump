@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
 using Thump.Data;
@@ -124,31 +123,78 @@ namespace Thump.Pulse
 
 	public class PulseClient
 	{
-		private readonly HttpClient m_httpClient;
-		private readonly string m_baseUrl;
-		private readonly string m_user;
-		private readonly string m_apiParams;
-		private readonly ConcurrentDictionary<string, byte[]> m_imageCache = new ConcurrentDictionary<string, byte[]>();
-
-		public PulseClient(string baseUrl, string user)
+		public enum eSubSonicAuthType
 		{
-			m_baseUrl = baseUrl.TrimEnd('/');
-			m_user = user;
-			m_apiParams = "u=" + m_user + "&p=enc:&v=1.13.0&c=PulseMaui&f=json";
+			Token,
+			Legacy
+		}
+		
+		private HttpClient m_httpClient;
+		private string m_baseUrl;
+		private string m_user;
+		private string m_apiParams;
+		private eSubSonicAuthType m_authType;
+
+		private bool m_bIsOnline = false;
+		/// <summary>
+		/// todo this seems dumb now that we have a real cache
+		/// </summary>
+		private ConcurrentDictionary<string, byte[]> m_imageCache = new ConcurrentDictionary<string, byte[]>();
+
+		public PulseClient()
+		{
+		}
+
+		public void SetServerParams(string ip, string port, string username, string password, eSubSonicAuthType authType, bool enableSSL)
+		{
+			//todo validate these strings
+
+			string prefix = "http://";
+			if (enableSSL)
+				prefix = "https://";
+
+			m_baseUrl = prefix + ip + ":" + port;
+			m_user = username;
+			m_apiParams = "u=" + m_user + "&p=enc:"+ password + "&v=1.13.0&c=PulseMaui&f=json";
+			m_authType = authType;
+
+			if (m_httpClient != null)
+				m_httpClient.Dispose();
+
 			HttpClientHandler handler = new HttpClientHandler();
 			handler.ServerCertificateCustomValidationCallback = AcceptAnyServerCertificate;
 			m_httpClient = new HttpClient(handler);
 			m_httpClient.Timeout = TimeSpan.FromSeconds(10);
+			TestConnection(out JsonElement discard);
 		}
 
+		public bool TestConnection(out JsonElement response)
+		{
+			try
+			{
+				if (SubsonicGet("ping", out response))
+				{
+					m_bIsOnline = true;
+					return true;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Exception(ex);
+			}
+			m_bIsOnline = false;
+			response = default;
+			return false;
+		}
 		private static bool AcceptAnyServerCertificate(HttpRequestMessage request, System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, System.Security.Cryptography.X509Certificates.X509Chain chain, System.Net.Security.SslPolicyErrors errors)
 		{
+
 			return true;
 		}
 
 		public bool IsOnline()
 		{
-			return true;
+			return m_bIsOnline;
 		}
 		public string BuildStreamUrl(string trackId)
 		{
