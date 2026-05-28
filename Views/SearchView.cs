@@ -16,6 +16,11 @@ namespace Thump.Views
 
 		public SearchView(MainView mainView) : base(mainView)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			Grid grid = new Grid();
@@ -30,14 +35,27 @@ namespace Thump.Views
 			grid.RowDefinitions.Add(entryRow);
 			grid.RowDefinitions.Add(resultsRow);
 
+			grid.Children.Add(BuildTitle());
+			grid.Children.Add(BuildSearchEntry());
+			grid.Children.Add(BuildResults());
+
+			Content = grid;
+		}
+
+		private View BuildTitle()
+		{
 			Label header = new Label();
 			header.Text = "Search";
 			header.FontSize = 24;
 			header.TextColor = ThumpColors.OnBackground;
 			header.Padding = new Thickness(16, 12);
-			Grid.SetRow(header, 0);
-			grid.Children.Add(header);
 
+			Grid.SetRow(header, 0);
+			return header;
+		}
+
+		private View BuildSearchEntry()
+		{
 			m_searchEntry = new Entry();
 			m_searchEntry.Placeholder = "Search artists, albums, songs";
 			m_searchEntry.PlaceholderColor = ThumpColors.TextDim;
@@ -46,11 +64,14 @@ namespace Thump.Views
 			m_searchEntry.FontSize = 15;
 			m_searchEntry.Margin = new Thickness(16, 0, 16, 12);
 			m_searchEntry.Completed += OnSearchCompleted;
-			Grid.SetRow(m_searchEntry, 1);
-			grid.Children.Add(m_searchEntry);
 
+			Grid.SetRow(m_searchEntry, 1);
+			return m_searchEntry;
+		}
+
+		private View BuildResults()
+		{
 			ScrollView scroll = new ScrollView();
-			Grid.SetRow(scroll, 2);
 
 			StackLayout stack = new StackLayout();
 			stack.Spacing = 16;
@@ -89,9 +110,9 @@ namespace Thump.Views
 			stack.Children.Add(m_songResults);
 
 			scroll.Content = stack;
-			grid.Children.Add(scroll);
 
-			Content = grid;
+			Grid.SetRow(scroll, 2);
+			return scroll;
 		}
 
 		public override void Initialize()

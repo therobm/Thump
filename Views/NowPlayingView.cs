@@ -18,6 +18,11 @@ namespace Thump.Views
 
 		public NowPlayingView(MainView mainView) : base(mainView)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			Grid grid = new Grid();
@@ -41,9 +46,20 @@ namespace Thump.Views
 			grid.RowDefinitions.Add(controlsRow);
 			grid.RowDefinitions.Add(actionsRow);
 
+			grid.Children.Add(BuildHeader());
+			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildTitle());
+			grid.Children.Add(BuildSeekBar());
+			grid.Children.Add(BuildTransport());
+			grid.Children.Add(BuildActions());
+
+			Content = grid;
+		}
+
+		private View BuildHeader()
+		{
 			HorizontalStackLayout headerStack = new HorizontalStackLayout();
 			headerStack.Padding = new Thickness(8, 8, 8, 0);
-			Grid.SetRow(headerStack, 0);
 
 			Button backButton = new Button();
 			backButton.Text = "‹";
@@ -55,20 +71,27 @@ namespace Thump.Views
 			backButton.Clicked += OnBackClicked;
 			headerStack.Children.Add(backButton);
 
-			grid.Children.Add(headerStack);
+			Grid.SetRow(headerStack, 0);
+			return headerStack;
+		}
 
+		private View BuildArt()
+		{
 			m_art = new ArtImage();
 			m_art.WidthRequest = 280;
 			m_art.HeightRequest = 280;
 			m_art.HorizontalOptions = LayoutOptions.Center;
 			m_art.VerticalOptions = LayoutOptions.Center;
-			Grid.SetRow(m_art, 1);
-			grid.Children.Add(m_art);
 
+			Grid.SetRow(m_art, 1);
+			return m_art;
+		}
+
+		private View BuildTitle()
+		{
 			StackLayout titleStack = new StackLayout();
 			titleStack.Spacing = 4;
 			titleStack.Padding = new Thickness(24, 16, 24, 8);
-			Grid.SetRow(titleStack, 2);
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Track title";
@@ -86,11 +109,14 @@ namespace Thump.Views
 			m_artistLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			titleStack.Children.Add(m_artistLabel);
 
-			grid.Children.Add(titleStack);
+			Grid.SetRow(titleStack, 2);
+			return titleStack;
+		}
 
+		private View BuildSeekBar()
+		{
 			Grid seekGrid = new Grid();
 			seekGrid.Padding = new Thickness(24, 8, 24, 4);
-			Grid.SetRow(seekGrid, 3);
 
 			ColumnDefinition currentTimeColumn = new ColumnDefinition();
 			currentTimeColumn.Width = GridLength.Auto;
@@ -128,13 +154,16 @@ namespace Thump.Views
 			Grid.SetColumn(m_totalTimeLabel, 2);
 			seekGrid.Children.Add(m_totalTimeLabel);
 
-			grid.Children.Add(seekGrid);
+			Grid.SetRow(seekGrid, 3);
+			return seekGrid;
+		}
 
+		private View BuildTransport()
+		{
 			HorizontalStackLayout controlsStack = new HorizontalStackLayout();
 			controlsStack.Spacing = 16;
 			controlsStack.HorizontalOptions = LayoutOptions.Center;
 			controlsStack.Padding = new Thickness(0, 8, 0, 8);
-			Grid.SetRow(controlsStack, 4);
 
 			Button shuffleButton = new Button();
 			shuffleButton.Text = "⇋";
@@ -187,13 +216,16 @@ namespace Thump.Views
 			repeatButton.Clicked += OnRepeatClicked;
 			controlsStack.Children.Add(repeatButton);
 
-			grid.Children.Add(controlsStack);
+			Grid.SetRow(controlsStack, 4);
+			return controlsStack;
+		}
 
+		private View BuildActions()
+		{
 			HorizontalStackLayout actionsStack = new HorizontalStackLayout();
 			actionsStack.Spacing = 16;
 			actionsStack.HorizontalOptions = LayoutOptions.Center;
 			actionsStack.Padding = new Thickness(0, 0, 0, 16);
-			Grid.SetRow(actionsStack, 5);
 
 			Button favoriteButton = new Button();
 			favoriteButton.Text = "♡  Favorite";
@@ -211,9 +243,8 @@ namespace Thump.Views
 			queueButton.Clicked += OnQueueClicked;
 			actionsStack.Children.Add(queueButton);
 
-			grid.Children.Add(actionsStack);
-
-			Content = grid;
+			Grid.SetRow(actionsStack, 5);
+			return actionsStack;
 		}
 
 		public override void Initialize()

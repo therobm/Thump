@@ -16,16 +16,40 @@ namespace Thump.Views.Tiles
 
 		public HomeCarouselTile() : base(MainView.Self)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			WidthRequest = 140;
 
 			StackLayout stack = new StackLayout();
 			stack.Spacing = 6;
 			stack.Padding = new Thickness(6, 0);
 
+			stack.Children.Add(BuildArt());
+			stack.Children.Add(BuildLabels());
+
+			TapGestureRecognizer tap = new TapGestureRecognizer();
+			tap.Tapped += OnTapped;
+			stack.GestureRecognizers.Add(tap);
+
+			Content = stack;
+		}
+
+		private View BuildArt()
+		{
 			m_art = new ArtImage();
 			m_art.WidthRequest = 128;
 			m_art.HeightRequest = 128;
-			stack.Children.Add(m_art);
+
+			return m_art;
+		}
+
+		private View BuildLabels()
+		{
+			StackLayout labelStack = new StackLayout();
+			labelStack.Spacing = 6;
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Title";
@@ -33,7 +57,7 @@ namespace Thump.Views.Tiles
 			m_titleLabel.FontSize = 13;
 			m_titleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			m_titleLabel.MaxLines = 1;
-			stack.Children.Add(m_titleLabel);
+			labelStack.Children.Add(m_titleLabel);
 
 			m_subtitleLabel = new Label();
 			m_subtitleLabel.Text = "Subtitle";
@@ -41,13 +65,9 @@ namespace Thump.Views.Tiles
 			m_subtitleLabel.FontSize = 11;
 			m_subtitleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			m_subtitleLabel.MaxLines = 1;
-			stack.Children.Add(m_subtitleLabel);
+			labelStack.Children.Add(m_subtitleLabel);
 
-			TapGestureRecognizer tap = new TapGestureRecognizer();
-			tap.Tapped += OnTapped;
-			stack.GestureRecognizers.Add(tap);
-
-			Content = stack;
+			return labelStack;
 		}
 
 		public override void Initialize()

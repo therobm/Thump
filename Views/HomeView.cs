@@ -16,6 +16,11 @@ namespace Thump.Views
 
 		public HomeView(MainView mainView) : base(mainView)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			StackLayout stack = new StackLayout();

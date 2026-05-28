@@ -15,6 +15,11 @@ namespace Thump.Views.Tiles
 
 		public AlbumRowTile() : base(MainView.Self)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			Grid grid = new Grid();
 			grid.Padding = new Thickness(16, 8);
 
@@ -25,18 +30,33 @@ namespace Thump.Views.Tiles
 			grid.ColumnDefinitions.Add(artColumn);
 			grid.ColumnDefinitions.Add(textColumn);
 
+			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildText());
+
+			TapGestureRecognizer tap = new TapGestureRecognizer();
+			tap.Tapped += OnTapped;
+			grid.GestureRecognizers.Add(tap);
+
+			Content = grid;
+		}
+
+		private View BuildArt()
+		{
 			m_art = new ArtImage();
 			m_art.WidthRequest = 56;
 			m_art.HeightRequest = 56;
 			m_art.VerticalOptions = LayoutOptions.Center;
-			Grid.SetColumn(m_art, 0);
-			grid.Children.Add(m_art);
 
+			Grid.SetColumn(m_art, 0);
+			return m_art;
+		}
+
+		private View BuildText()
+		{
 			StackLayout textStack = new StackLayout();
 			textStack.VerticalOptions = LayoutOptions.Center;
 			textStack.Spacing = 2;
 			textStack.Padding = new Thickness(12, 0, 0, 0);
-			Grid.SetColumn(textStack, 1);
 
 			m_nameLabel = new Label();
 			m_nameLabel.Text = "Album name";
@@ -52,13 +72,8 @@ namespace Thump.Views.Tiles
 			m_subtitleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			textStack.Children.Add(m_subtitleLabel);
 
-			grid.Children.Add(textStack);
-
-			TapGestureRecognizer tap = new TapGestureRecognizer();
-			tap.Tapped += OnTapped;
-			grid.GestureRecognizers.Add(tap);
-
-			Content = grid;
+			Grid.SetColumn(textStack, 1);
+			return textStack;
 		}
 
 		public override void Initialize()

@@ -14,6 +14,11 @@ namespace Thump.Views
 
 		public MiniPlayer(MainView mainView) : base(mainView)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Surface;
 			HeightRequest = 64;
 
@@ -30,17 +35,33 @@ namespace Thump.Views
 			grid.ColumnDefinitions.Add(textColumn);
 			grid.ColumnDefinitions.Add(buttonColumn);
 
+			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildTrackInfo());
+			grid.Children.Add(BuildPlayButton());
+
+			TapGestureRecognizer tap = new TapGestureRecognizer();
+			tap.Tapped += OnExpandTapped;
+			grid.GestureRecognizers.Add(tap);
+
+			Content = grid;
+		}
+
+		private View BuildArt()
+		{
 			m_art = new ArtImage();
 			m_art.WidthRequest = 48;
 			m_art.HeightRequest = 48;
 			m_art.VerticalOptions = LayoutOptions.Center;
-			Grid.SetColumn(m_art, 0);
-			grid.Children.Add(m_art);
 
+			Grid.SetColumn(m_art, 0);
+			return m_art;
+		}
+
+		private View BuildTrackInfo()
+		{
 			StackLayout textStack = new StackLayout();
 			textStack.VerticalOptions = LayoutOptions.Center;
 			textStack.Spacing = 2;
-			Grid.SetColumn(textStack, 1);
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Nothing playing";
@@ -54,8 +75,12 @@ namespace Thump.Views
 			m_artistLabel.FontSize = 12;
 			textStack.Children.Add(m_artistLabel);
 
-			grid.Children.Add(textStack);
+			Grid.SetColumn(textStack, 1);
+			return textStack;
+		}
 
+		private View BuildPlayButton()
+		{
 			Button playPauseButton = new Button();
 			playPauseButton.Text = "▶";
 			playPauseButton.TextColor = ThumpColors.OnBackground;
@@ -64,14 +89,9 @@ namespace Thump.Views
 			playPauseButton.WidthRequest = 48;
 			playPauseButton.HeightRequest = 48;
 			playPauseButton.Clicked += OnPlayPauseClicked;
+
 			Grid.SetColumn(playPauseButton, 2);
-			grid.Children.Add(playPauseButton);
-
-			TapGestureRecognizer tap = new TapGestureRecognizer();
-			tap.Tapped += OnExpandTapped;
-			grid.GestureRecognizers.Add(tap);
-
-			Content = grid;
+			return playPauseButton;
 		}
 
 		public override void Initialize()

@@ -14,6 +14,11 @@ namespace Thump.Views.Tiles
 
 		public TrackRowTile() : base(MainView.Self)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			Grid grid = new Grid();
 			grid.Padding = new Thickness(16, 8);
 
@@ -24,10 +29,21 @@ namespace Thump.Views.Tiles
 			grid.ColumnDefinitions.Add(textColumn);
 			grid.ColumnDefinitions.Add(durationColumn);
 
+			grid.Children.Add(BuildText());
+			grid.Children.Add(BuildDuration());
+
+			TapGestureRecognizer tap = new TapGestureRecognizer();
+			tap.Tapped += OnTapped;
+			grid.GestureRecognizers.Add(tap);
+
+			Content = grid;
+		}
+
+		private View BuildText()
+		{
 			StackLayout textStack = new StackLayout();
 			textStack.VerticalOptions = LayoutOptions.Center;
 			textStack.Spacing = 2;
-			Grid.SetColumn(textStack, 0);
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Track title";
@@ -43,21 +59,20 @@ namespace Thump.Views.Tiles
 			m_artistLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			textStack.Children.Add(m_artistLabel);
 
-			grid.Children.Add(textStack);
+			Grid.SetColumn(textStack, 0);
+			return textStack;
+		}
 
+		private View BuildDuration()
+		{
 			m_durationLabel = new Label();
 			m_durationLabel.Text = "0:00";
 			m_durationLabel.TextColor = ThumpColors.TextDim;
 			m_durationLabel.FontSize = 12;
 			m_durationLabel.VerticalOptions = LayoutOptions.Center;
+
 			Grid.SetColumn(m_durationLabel, 1);
-			grid.Children.Add(m_durationLabel);
-
-			TapGestureRecognizer tap = new TapGestureRecognizer();
-			tap.Tapped += OnTapped;
-			grid.GestureRecognizers.Add(tap);
-
-			Content = grid;
+			return m_durationLabel;
 		}
 
 		public override void Initialize()

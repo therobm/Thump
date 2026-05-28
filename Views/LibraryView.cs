@@ -36,6 +36,11 @@ namespace Thump.Views
 
 		public LibraryView(MainView mainView) : base(mainView)
 		{
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			Grid grid = new Grid();
@@ -50,18 +55,30 @@ namespace Thump.Views
 			grid.RowDefinitions.Add(chipRow);
 			grid.RowDefinitions.Add(listRow);
 
+			grid.Children.Add(BuildTitle());
+			grid.Children.Add(BuildChips());
+			grid.Children.Add(BuildLists());
+
+			Content = grid;
+		}
+
+		private View BuildTitle()
+		{
 			Label header = new Label();
 			header.Text = "Library";
 			header.FontSize = 24;
 			header.TextColor = ThumpColors.OnBackground;
 			header.Padding = new Thickness(16, 12);
-			Grid.SetRow(header, 0);
-			grid.Children.Add(header);
 
+			Grid.SetRow(header, 0);
+			return header;
+		}
+
+		private View BuildChips()
+		{
 			HorizontalStackLayout chipStack = new HorizontalStackLayout();
 			chipStack.Spacing = 8;
 			chipStack.Padding = new Thickness(16, 0, 16, 12);
-			Grid.SetRow(chipStack, 1);
 
 			m_chipArtists = new Button();
 			m_chipArtists.Text = "Artists";
@@ -107,37 +124,40 @@ namespace Thump.Views
 			m_chipGenres.Clicked += OnChipGenresClicked;
 			chipStack.Children.Add(m_chipGenres);
 
-			grid.Children.Add(chipStack);
+			Grid.SetRow(chipStack, 1);
+			return chipStack;
+		}
+
+		private View BuildLists()
+		{
+			Grid listContainer = new Grid();
 
 			m_artistsList = new CollectionView();
 			m_artistsList.IsVisible = true;
 			m_artistsList.BackgroundColor = ThumpColors.Background;
 			m_artistsList.ItemTemplate = new DataTemplate(typeof(ArtistRowTile));
-			Grid.SetRow(m_artistsList, 2);
-			grid.Children.Add(m_artistsList);
+			listContainer.Children.Add(m_artistsList);
 
 			m_albumsList = new CollectionView();
 			m_albumsList.IsVisible = false;
 			m_albumsList.BackgroundColor = ThumpColors.Background;
 			m_albumsList.ItemTemplate = new DataTemplate(typeof(AlbumRowTile));
-			Grid.SetRow(m_albumsList, 2);
-			grid.Children.Add(m_albumsList);
+			listContainer.Children.Add(m_albumsList);
 
 			m_playlistsList = new CollectionView();
 			m_playlistsList.IsVisible = false;
 			m_playlistsList.BackgroundColor = ThumpColors.Background;
 			m_playlistsList.ItemTemplate = new DataTemplate(typeof(PlaylistRowTile));
-			Grid.SetRow(m_playlistsList, 2);
-			grid.Children.Add(m_playlistsList);
+			listContainer.Children.Add(m_playlistsList);
 
 			m_genresList = new CollectionView();
 			m_genresList.IsVisible = false;
 			m_genresList.BackgroundColor = ThumpColors.Background;
 			m_genresList.ItemTemplate = new DataTemplate(typeof(GenreRowTile));
-			Grid.SetRow(m_genresList, 2);
-			grid.Children.Add(m_genresList);
+			listContainer.Children.Add(m_genresList);
 
-			Content = grid;
+			Grid.SetRow(listContainer, 2);
+			return listContainer;
 		}
 
 		public override void Initialize()

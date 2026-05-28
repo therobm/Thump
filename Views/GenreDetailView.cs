@@ -18,6 +18,12 @@ namespace Thump.Views
 
 		public GenreDetailView(MainView mainView, PulseGenre genre) : base(mainView)
 		{
+			m_genre = genre;
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			Grid grid = new Grid();
@@ -35,9 +41,18 @@ namespace Thump.Views
 			grid.RowDefinitions.Add(buttonRow);
 			grid.RowDefinitions.Add(listRow);
 
+			grid.Children.Add(BuildHeader());
+			grid.Children.Add(BuildTitle());
+			grid.Children.Add(BuildButtons());
+			grid.Children.Add(BuildTrackList());
+
+			Content = grid;
+		}
+
+		private View BuildHeader()
+		{
 			HorizontalStackLayout headerStack = new HorizontalStackLayout();
 			headerStack.Padding = new Thickness(8, 8, 8, 0);
-			Grid.SetRow(headerStack, 0);
 
 			Button backButton = new Button();
 			backButton.Text = "‹";
@@ -49,12 +64,15 @@ namespace Thump.Views
 			backButton.Clicked += OnBackClicked;
 			headerStack.Children.Add(backButton);
 
-			grid.Children.Add(headerStack);
+			Grid.SetRow(headerStack, 0);
+			return headerStack;
+		}
 
+		private View BuildTitle()
+		{
 			StackLayout titleStack = new StackLayout();
 			titleStack.Spacing = 4;
 			titleStack.Padding = new Thickness(16, 12, 16, 12);
-			Grid.SetRow(titleStack, 1);
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Genre";
@@ -68,12 +86,15 @@ namespace Thump.Views
 			m_metaLabel.TextColor = ThumpColors.TextDim;
 			titleStack.Children.Add(m_metaLabel);
 
-			grid.Children.Add(titleStack);
+			Grid.SetRow(titleStack, 1);
+			return titleStack;
+		}
 
+		private View BuildButtons()
+		{
 			HorizontalStackLayout buttonStack = new HorizontalStackLayout();
 			buttonStack.Spacing = 12;
 			buttonStack.Padding = new Thickness(16, 0, 16, 12);
-			Grid.SetRow(buttonStack, 2);
 
 			Button playButton = new Button();
 			playButton.Text = "▶  Play";
@@ -95,16 +116,17 @@ namespace Thump.Views
 			shuffleButton.Clicked += OnShuffleClicked;
 			buttonStack.Children.Add(shuffleButton);
 
-			grid.Children.Add(buttonStack);
+			Grid.SetRow(buttonStack, 2);
+			return buttonStack;
+		}
 
+		private View BuildTrackList()
+		{
 			m_trackList = new CollectionView();
 			m_trackList.ItemTemplate = new DataTemplate(typeof(TrackRowTile));
+
 			Grid.SetRow(m_trackList, 3);
-			grid.Children.Add(m_trackList);
-
-			Content = grid;
-
-			m_genre = genre;
+			return m_trackList;
 		}
 
 		public override void Initialize()

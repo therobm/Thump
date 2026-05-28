@@ -19,6 +19,12 @@ namespace Thump.Views
 
 		public PlaylistDetailView(MainView mainView, PulsePlaylist playlist) : base(mainView)
 		{
+			m_playlist = playlist;
+			BuildLayout();
+		}
+
+		private void BuildLayout()
+		{
 			BackgroundColor = ThumpColors.Background;
 
 			Grid grid = new Grid();
@@ -39,9 +45,19 @@ namespace Thump.Views
 			grid.RowDefinitions.Add(buttonRow);
 			grid.RowDefinitions.Add(listRow);
 
+			grid.Children.Add(BuildHeader());
+			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildTitle());
+			grid.Children.Add(BuildButtons());
+			grid.Children.Add(BuildTrackList());
+
+			Content = grid;
+		}
+
+		private View BuildHeader()
+		{
 			HorizontalStackLayout headerStack = new HorizontalStackLayout();
 			headerStack.Padding = new Thickness(8, 8, 8, 0);
-			Grid.SetRow(headerStack, 0);
 
 			Button backButton = new Button();
 			backButton.Text = "‹";
@@ -53,20 +69,27 @@ namespace Thump.Views
 			backButton.Clicked += OnBackClicked;
 			headerStack.Children.Add(backButton);
 
-			grid.Children.Add(headerStack);
+			Grid.SetRow(headerStack, 0);
+			return headerStack;
+		}
 
+		private View BuildArt()
+		{
 			m_art = new ArtImage();
 			m_art.HeightRequest = 220;
 			m_art.WidthRequest = 220;
 			m_art.HorizontalOptions = LayoutOptions.Center;
 			m_art.Margin = new Thickness(0, 12, 0, 16);
-			Grid.SetRow(m_art, 1);
-			grid.Children.Add(m_art);
 
+			Grid.SetRow(m_art, 1);
+			return m_art;
+		}
+
+		private View BuildTitle()
+		{
 			StackLayout titleStack = new StackLayout();
 			titleStack.Spacing = 4;
 			titleStack.Padding = new Thickness(16, 0, 16, 12);
-			Grid.SetRow(titleStack, 2);
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Playlist name";
@@ -82,13 +105,16 @@ namespace Thump.Views
 			m_metaLabel.HorizontalOptions = LayoutOptions.Center;
 			titleStack.Children.Add(m_metaLabel);
 
-			grid.Children.Add(titleStack);
+			Grid.SetRow(titleStack, 2);
+			return titleStack;
+		}
 
+		private View BuildButtons()
+		{
 			HorizontalStackLayout buttonStack = new HorizontalStackLayout();
 			buttonStack.Spacing = 12;
 			buttonStack.Padding = new Thickness(16, 0, 16, 12);
 			buttonStack.HorizontalOptions = LayoutOptions.Center;
-			Grid.SetRow(buttonStack, 3);
 
 			Button playButton = new Button();
 			playButton.Text = "▶  Play";
@@ -110,16 +136,17 @@ namespace Thump.Views
 			shuffleButton.Clicked += OnShuffleClicked;
 			buttonStack.Children.Add(shuffleButton);
 
-			grid.Children.Add(buttonStack);
+			Grid.SetRow(buttonStack, 3);
+			return buttonStack;
+		}
 
+		private View BuildTrackList()
+		{
 			m_trackList = new CollectionView();
 			m_trackList.ItemTemplate = new DataTemplate(typeof(TrackRowTile));
+
 			Grid.SetRow(m_trackList, 4);
-			grid.Children.Add(m_trackList);
-
-			Content = grid;
-
-			m_playlist = playlist;
+			return m_trackList;
 		}
 
 		public override void Initialize()
