@@ -417,18 +417,6 @@ namespace Thump.Pulse
 			});
 		}
 
-		private PulseAlbum MakePlaceholderAlbum(string id, string name, string artist, int year, int songCount)
-		{
-			PulseAlbum album = new PulseAlbum();
-			album.Id = id;
-			album.Name = name;
-			album.Artist = artist;
-			album.Year = year;
-			album.SongCount = songCount;
-			album.Duration = songCount * 215;
-			return album;
-		}
-
 		public void CreatePlaylist(string name, Action<PulsePlaylist> onComplete)
 		{
 			Task.Run(() =>
@@ -940,36 +928,35 @@ namespace Thump.Pulse
 
 		public void GetTopItems(Action<List<PulseObject>> onComplete)
 		{
-			// Placeholder preview data for the home top-8 panel: backing route is TBD.
-			List<PulseObject> results = new List<PulseObject>();
-			results.Add(MakePlaceholderAlbum("ph-top-1", "Midnight Geometry", "Aurora Sky", 2023, 11));
-			results.Add(MakePlaceholderPlaylist("ph-top-2", "Late Night Drive", 64));
-			results.Add(MakePlaceholderArtist("ph-top-3", "Vector Field", 6));
-			results.Add(MakePlaceholderAlbum("ph-top-4", "Coastlines", "The Pale Hours", 2021, 9));
-			results.Add(MakePlaceholderPlaylist("ph-top-5", "Focus Flow", 88));
-			results.Add(MakePlaceholderArtist("ph-top-6", "Halcyon Drift", 4));
-			results.Add(MakePlaceholderAlbum("ph-top-7", "Paper Cities", "North Bell", 2022, 10));
-			results.Add(MakePlaceholderPlaylist("ph-top-8", "Weekend Anthems", 52));
-			MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
-		}
-
-		private PulsePlaylist MakePlaceholderPlaylist(string id, string name, int songCount)
-		{
-			PulsePlaylist playlist = new PulsePlaylist();
-			playlist.Id = id;
-			playlist.Name = name;
-			playlist.SongCount = songCount;
-			playlist.Duration = songCount * 210;
-			return playlist;
-		}
-
-		private PulseArtist MakePlaceholderArtist(string id, string name, int albumCount)
-		{
-			PulseArtist artist = new PulseArtist();
-			artist.Id = id;
-			artist.Name = name;
-			artist.AlbumCount = albumCount;
-			return artist;
+			Task.Run(() =>
+			{
+				List<PulseObject> results = new List<PulseObject>();
+				try
+				{
+					int count = 50;
+					string url = m_baseUrl + "/pulse/topPlaylists?count=" + count + "&u=" + m_user;
+					string json = HttpGet(url);
+					if (json != null)
+					{
+						JsonDocument doc = JsonDocument.Parse(json);
+						if (doc.RootElement.TryGetProperty("playlists", out JsonElement playlists) && playlists.ValueKind == JsonValueKind.Array)
+						{
+							foreach (JsonElement element in playlists.EnumerateArray())
+							{
+								PulsePlaylist playlist = ParsePlaylist(element);
+								results.Add(playlist);
+							}
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				List<PulseObject> captured = results;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
+			});
 		}
 
 		public void GetTracksForGenre(string genre, Action<List<PulseTrack>> onComplete)
