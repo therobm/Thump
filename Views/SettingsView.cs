@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Maui;
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
 using Thump.Data;
@@ -59,6 +60,7 @@ namespace Thump.Views
 			stack.Children.Add(BuildTitle());
 			stack.Children.Add(BuildPlaybackSection());
 			stack.Children.Add(BuildCachingSection());
+			stack.Children.Add(BuildDiagnosticsSection());
 			stack.Children.Add(BuildLoginSection());
 
 			scroll.Content = stack;
@@ -211,6 +213,27 @@ namespace Thump.Views
 			clearButton.Margin = new Thickness(0, 4, 0, 0);
 			clearButton.Clicked += OnClearCacheClicked;
 			section.Children.Add(clearButton);
+
+			return section;
+		}
+
+		private View BuildDiagnosticsSection()
+		{
+			VerticalStackLayout section = new VerticalStackLayout();
+			section.Spacing = 12;
+			section.Children.Add(BuildSectionHeader("Diagnostics"));
+			section.Children.Add(BuildFieldLabel("Export the app log file to share when reporting a problem."));
+
+			Button exportButton = new Button();
+			exportButton.Text = "Export Logs";
+			exportButton.TextColor = ThumpColors.OnBackground;
+			exportButton.BackgroundColor = ThumpColors.Surface;
+			exportButton.CornerRadius = 8;
+			exportButton.FontSize = 15;
+			exportButton.HeightRequest = 44;
+			exportButton.Margin = new Thickness(0, 4, 0, 0);
+			exportButton.Clicked += OnExportLogsClicked;
+			section.Children.Add(exportButton);
 
 			return section;
 		}
@@ -386,6 +409,21 @@ namespace Thump.Views
 				cache.ClearCache();
 			});
 			RefreshCacheStats();
+		}
+
+		private async void OnExportLogsClicked(object sender, EventArgs e)
+		{
+			try
+			{
+				ShareFileRequest request = new ShareFileRequest();
+				request.Title = "Thump logs";
+				request.File = new ShareFile(Log.GetLogFilePath());
+				await Share.Default.RequestAsync(request);
+			}
+			catch (Exception ex)
+			{
+				Log.Exception(ex);
+			}
 		}
 
 		private static string ValidateAndNormalizeServer(string ip, string port, out string normalizedIp)
