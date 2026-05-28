@@ -740,6 +740,12 @@ namespace Thump.Pulse
 				try
 				{
 					HttpResponseMessage response = m_httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, url)).Result;
+					if (!response.IsSuccessStatusCode)
+					{
+						Log.Error("Cover art fetch failed: " + url + " status: " + response.StatusCode);
+						MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+						return;
+					}
 					byte[] data = response.Content.ReadAsByteArrayAsync().Result;
 					m_imageCache[url] = data;
 					MainThread.BeginInvokeOnMainThread(() => { onComplete(data); });
