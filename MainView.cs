@@ -420,9 +420,11 @@ namespace Thump
 			}
 			m_currentQueue.AddRange(tracks);
 			m_player.AddToQueue(tracks);
+			m_miniPlayer.RefreshSkipButtons();
 			if (m_nowPlayingView != null)
 			{
 				m_nowPlayingView.RefreshQueue();
+				m_nowPlayingView.RefreshSkipButtons();
 			}
 		}
 
@@ -444,9 +446,11 @@ namespace Thump
 			}
 			m_currentQueue.InsertRange(insertAt, tracks);
 			m_player.PlayNext(tracks);
+			m_miniPlayer.RefreshSkipButtons();
 			if (m_nowPlayingView != null)
 			{
 				m_nowPlayingView.RefreshQueue();
+				m_nowPlayingView.RefreshSkipButtons();
 			}
 		}
 

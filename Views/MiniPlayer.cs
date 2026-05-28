@@ -162,6 +162,11 @@ namespace Thump.Views
 			UpdateSkipButtons();
 		}
 
+		public void RefreshSkipButtons()
+		{
+			UpdateSkipButtons();
+		}
+
 		private void UpdateSkipButtons()
 		{
 			if (m_prevButton == null || m_nextButton == null)
