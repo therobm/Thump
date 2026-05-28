@@ -104,7 +104,7 @@ namespace Thump.Playback
 						for (int idx = 0; idx < albums.Count; idx++)
 						{
 							PulseAlbum album = albums[idx];
-							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name));
+							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
 						}
 					}
 					completer.Set(LibraryResult.OfItemList(items, libraryParams));
@@ -121,7 +121,7 @@ namespace Thump.Playback
 						for (int idx = 0; idx < playlists.Count; idx++)
 						{
 							PulsePlaylist playlist = playlists[idx];
-							items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name));
+							items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name, playlist.CoverArt));
 						}
 					}
 					completer.Set(LibraryResult.OfItemList(items, libraryParams));
@@ -138,7 +138,7 @@ namespace Thump.Playback
 						for (int idx = 0; idx < artists.Count; idx++)
 						{
 							PulseArtist artist = artists[idx];
-							items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name));
+							items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name, artist.CoverArt));
 						}
 					}
 					completer.Set(LibraryResult.OfItemList(items, libraryParams));
@@ -211,7 +211,7 @@ namespace Thump.Playback
 						for (int idx = 0; idx < albums.Count; idx++)
 						{
 							PulseAlbum album = albums[idx];
-							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name));
+							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
 						}
 					}
 					completer.Set(LibraryResult.OfItemList(items, libraryParams));
@@ -321,7 +321,7 @@ namespace Thump.Playback
 			for (int idx = 0; idx < tracks.Count; idx++)
 			{
 				PulseTrack track = tracks[idx];
-				items.Add(BuildPlayableItem("track/" + track.Id, track.Title, track.Artist));
+				items.Add(BuildPlayableItem("track/" + track.Id, track.Title, track.Artist, track.ImageID));
 			}
 			return items;
 		}
@@ -338,10 +338,20 @@ namespace Thump.Playback
 
 		private static MediaItem BuildBrowsableItem(string mediaId, string title)
 		{
+			return BuildBrowsableItem(mediaId, title, null);
+		}
+
+		private static MediaItem BuildBrowsableItem(string mediaId, string title, string coverArtId)
+		{
 			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
 			metadata.SetTitle(title);
 			metadata.SetIsBrowsable(Java.Lang.Boolean.True);
 			metadata.SetIsPlayable(Java.Lang.Boolean.False);
+			Android.Net.Uri artworkUri = BuildArtworkUri(coverArtId);
+			if (artworkUri != null)
+			{
+				metadata.SetArtworkUri(artworkUri);
+			}
 
 			MediaItem.Builder builder = new MediaItem.Builder();
 			builder.SetMediaId(mediaId);
@@ -351,16 +361,35 @@ namespace Thump.Playback
 
 		private static MediaItem BuildPlayableItem(string mediaId, string title, string subtitle)
 		{
+			return BuildPlayableItem(mediaId, title, subtitle, null);
+		}
+
+		private static MediaItem BuildPlayableItem(string mediaId, string title, string subtitle, string coverArtId)
+		{
 			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
 			metadata.SetTitle(title);
 			metadata.SetArtist(subtitle);
 			metadata.SetIsBrowsable(Java.Lang.Boolean.False);
 			metadata.SetIsPlayable(Java.Lang.Boolean.True);
+			Android.Net.Uri artworkUri = BuildArtworkUri(coverArtId);
+			if (artworkUri != null)
+			{
+				metadata.SetArtworkUri(artworkUri);
+			}
 
 			MediaItem.Builder builder = new MediaItem.Builder();
 			builder.SetMediaId(mediaId);
 			builder.SetMediaMetadata(metadata.Build());
 			return builder.Build();
+		}
+
+		private static Android.Net.Uri BuildArtworkUri(string coverArtId)
+		{
+			if (string.IsNullOrEmpty(coverArtId))
+			{
+				return null;
+			}
+			return Android.Net.Uri.Parse("content://com.therobm.thump.coverart/" + Android.Net.Uri.Encode(coverArtId));
 		}
 
 		private static string ParsePrefix(string mediaId)
