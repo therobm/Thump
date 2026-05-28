@@ -200,6 +200,7 @@ namespace Thump.Playback
 				return;
 			}
 			m_controller.Pause();
+			m_ticker.Stop();
 		}
 
 		public void Resume()
@@ -208,7 +209,9 @@ namespace Thump.Playback
 			{
 				return;
 			}
+			m_endHandled = false;
 			m_controller.Play();
+			m_ticker.Start();
 		}
 
 		public void SeekTo(long positionMilliseconds)
