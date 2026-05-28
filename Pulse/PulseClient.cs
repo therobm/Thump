@@ -912,6 +912,12 @@ namespace Thump.Pulse
 			jsonElement = default;
 			string url = BuildRestUrl(endpoint, extraParams);
 			HttpResponseMessage httpResponse = m_httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, url)).Result;
+			if (!httpResponse.IsSuccessStatusCode)
+			{
+				Log.Error("Subsonic request failed: " + url + " status: " + httpResponse.StatusCode);
+				jsonElement = default;
+				return false;
+			}
 			string json = httpResponse.Content.ReadAsStringAsync().Result;
 			JsonDocument doc = JsonDocument.Parse(json);
 			JsonElement root = doc.RootElement;
