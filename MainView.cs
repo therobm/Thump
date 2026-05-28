@@ -98,6 +98,11 @@ namespace Thump
 			NavigateToHome();
 		}
 
+		public void OnPulseDataChanged() 
+		{
+			//todo go tell any active views they should refresh themselves
+		}
+
 		public void NavigateToHome()
 		{
 			m_activeTab = eTab.Home;

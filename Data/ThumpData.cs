@@ -69,20 +69,20 @@ namespace Thump.Data
 			
 			m_dataRoutes = new Dictionary<eRoutes, DataRoute>()
 			{
-				{ eRoutes.GetArtists,				new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.LocalFirst,		m_pulseClient.GetArtists,			m_cache.GetAllArtists,			m_cache.UpdateAllArtists,			IsValidList<PulseArtist>) },
-				{ eRoutes.GetAlbum,					new DataRouteID<PulseAlbum>(this,			eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetAlbum,				m_cache.GetAlbum,				m_cache.UpdateAlbum,				IsValidObject) },
-				{ eRoutes.GetAlbums,				new DataRoute<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetAlbums,			m_cache.GetAlbums,				m_cache.UpdateAlbums,				IsValidList<PulseAlbum>) },
-				{ eRoutes.GetAlbumsForArtist,		new DataRouteID<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetArtistAlbums,		m_cache.GetAlbumsForArtist,		m_cache.UpdateAlbumsForArtist,		IsValidList<PulseAlbum>) },
-				{ eRoutes.GetPlaylists,				new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetPlaylists,			m_cache.GetAllPlaylists,		m_cache.UpdateAllPlaylists,			IsValidList<PulsePlaylist>) },
-				{ eRoutes.GetPlaylist,				new DataRouteID<PulsePlaylist>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetPlaylist,			m_cache.GetPlaylist,			m_cache.UpdatePlaylist,				IsValidObject) },
-				{ eRoutes.GetGenres,				new DataRoute<List<PulseGenre>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetGenres,			m_cache.GetGenres,				m_cache.UpdateGenres,				IsValidList<PulseGenre>) },
-				{ eRoutes.GetTracksForGenre,		new DataRouteID<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetTracksForGenre,	m_cache.GetTracksForGenre,		m_cache.UpdateTracksForGenre,		IsValidList<PulseTrack>) },
+				{ eRoutes.GetArtists,				new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetArtists,			m_cache.GetAllArtists,			m_cache.UpdateAllArtists,			IsValidList<PulseArtist>) },
+				{ eRoutes.GetAlbum,					new DataRouteID<PulseAlbum>(this,			eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetAlbum,				m_cache.GetAlbum,				m_cache.UpdateAlbum,				IsValidObject) },
+				{ eRoutes.GetAlbums,				new DataRoute<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetAlbums,			m_cache.GetAlbums,				m_cache.UpdateAlbums,				IsValidList<PulseAlbum>) },
+				{ eRoutes.GetAlbumsForArtist,		new DataRouteID<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetArtistAlbums,		m_cache.GetAlbumsForArtist,		m_cache.UpdateAlbumsForArtist,		IsValidList<PulseAlbum>) },
+				{ eRoutes.GetPlaylists,				new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPlaylists,			m_cache.GetAllPlaylists,		m_cache.UpdateAllPlaylists,			IsValidList<PulsePlaylist>) },
+				{ eRoutes.GetPlaylist,				new DataRouteID<PulsePlaylist>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPlaylist,			m_cache.GetPlaylist,			m_cache.UpdatePlaylist,				IsValidObject) },
+				{ eRoutes.GetGenres,				new DataRoute<List<PulseGenre>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetGenres,			m_cache.GetGenres,				m_cache.UpdateGenres,				IsValidList<PulseGenre>) },
+				{ eRoutes.GetTracksForGenre,		new DataRouteID<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetTracksForGenre,	m_cache.GetTracksForGenre,		m_cache.UpdateTracksForGenre,		IsValidList<PulseTrack>) },
 				{ eRoutes.GetCoverArt,				new DataRouteID<byte[]>(this,				eRouteCachingMethod.LocalFirst,		m_pulseClient.GetCoverArt,			m_cache.GetCoverArt,			m_cache.UpdateCoverArt,				IsValidBinary) },
-				{ eRoutes.GetRecentlyPlayed,		new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetRecentlyPlayed,	m_cache.GetRecentlyPlayed,		m_cache.UpdateRecentlyPlayed,		IsValidList<PulseObject>) },
-				{ eRoutes.GetTopPlaylists,			new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetTopPlaylists,		m_cache.GetTopPlaylists,		m_cache.UpdateTopPlaylists,			IsValidList<PulsePlaylist>) },
-				{ eRoutes.GetPopularArtists,		new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetPopularArtists,	m_cache.GetPopularArtists,		m_cache.UpdatePopularArtists,		IsValidList<PulseArtist>) },
-				{ eRoutes.GetRecentlyAdded,			new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetRecentlyAdded,		m_cache.GetRecentlyAdded,		m_cache.UpdateRecentlyAdded,		IsValidList<PulseObject>) },
-				{ eRoutes.GetFavorites,				new DataRoute<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkFirst,	m_pulseClient.GetFavorites,			m_cache.GetFavorites,			m_cache.UpdateFavorites,			IsValidList<PulseTrack>) },
+				{ eRoutes.GetRecentlyPlayed,		new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetRecentlyPlayed,	m_cache.GetRecentlyPlayed,		m_cache.UpdateRecentlyPlayed,		IsValidList<PulseObject>) },
+				{ eRoutes.GetTopPlaylists,			new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetTopPlaylists,		m_cache.GetTopPlaylists,		m_cache.UpdateTopPlaylists,			IsValidList<PulsePlaylist>) },
+				{ eRoutes.GetPopularArtists,		new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPopularArtists,	m_cache.GetPopularArtists,		m_cache.UpdatePopularArtists,		IsValidList<PulseArtist>) },
+				{ eRoutes.GetRecentlyAdded,			new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetRecentlyAdded,		m_cache.GetRecentlyAdded,		m_cache.UpdateRecentlyAdded,		IsValidList<PulseObject>) },
+				{ eRoutes.GetFavorites,				new DataRoute<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetFavorites,			m_cache.GetFavorites,			m_cache.UpdateFavorites,			IsValidList<PulseTrack>) },
 			};
 			
 		}
