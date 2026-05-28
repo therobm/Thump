@@ -133,6 +133,7 @@ namespace Thump
 			m_detailStack.Clear();
 			m_contentHost.Content = m_homeView;
 			m_navFooter.SetActiveTab(eTab.Home);
+			RestoreMiniPlayerIfActive();
 		}
 
 		public void NavigateToLibrary()
@@ -141,6 +142,7 @@ namespace Thump
 			m_detailStack.Clear();
 			m_contentHost.Content = m_libraryView;
 			m_navFooter.SetActiveTab(eTab.Library);
+			RestoreMiniPlayerIfActive();
 		}
 
 		public void NavigateToSearch()
@@ -149,6 +151,7 @@ namespace Thump
 			m_detailStack.Clear();
 			m_contentHost.Content = m_searchView;
 			m_navFooter.SetActiveTab(eTab.Search);
+			RestoreMiniPlayerIfActive();
 		}
 
 		public void NavigateToSettings()
@@ -157,6 +160,7 @@ namespace Thump
 			m_detailStack.Clear();
 			m_contentHost.Content = m_settingsView;
 			m_navFooter.SetActiveTab(eTab.Settings);
+			RestoreMiniPlayerIfActive();
 		}
 
 		private void PushDetail(View detail)
@@ -175,6 +179,10 @@ namespace Thump
 			if (m_detailStack.Count > 0)
 			{
 				m_contentHost.Content = m_detailStack[m_detailStack.Count - 1];
+				if (m_contentHost.Content != m_nowPlayingView)
+				{
+					RestoreMiniPlayerIfActive();
+				}
 				return;
 			}
 			if (m_activeTab == eTab.Home)
@@ -192,6 +200,10 @@ namespace Thump
 			else if (m_activeTab == eTab.Settings)
 			{
 				m_contentHost.Content = m_settingsView;
+			}
+			if (m_contentHost.Content != m_nowPlayingView)
+			{
+				RestoreMiniPlayerIfActive();
 			}
 		}
 
@@ -631,6 +643,7 @@ namespace Thump
 			}
 			m_nowPlayingView.SetPlaying(m_playbackState == ePlaybackState.Playing);
 			PushDetail(m_nowPlayingView);
+			HideMiniPlayer();
 		}
 
 		public void ShowMiniPlayer()
@@ -641,6 +654,15 @@ namespace Thump
 		public void HideMiniPlayer()
 		{
 			m_miniPlayer.IsVisible = false;
+		}
+
+		private void RestoreMiniPlayerIfActive()
+		{
+			if (m_currentTrack == null)
+			{
+				return;
+			}
+			ShowMiniPlayer();
 		}
 	}
 }
