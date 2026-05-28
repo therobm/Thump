@@ -102,6 +102,20 @@ namespace Thump.Views
 
 		private View BuildPlayButton()
 		{
+			HorizontalStackLayout controlsStack = new HorizontalStackLayout();
+			controlsStack.Spacing = 0;
+			controlsStack.VerticalOptions = LayoutOptions.Center;
+
+			Button prevButton = new Button();
+			prevButton.Text = "⏮";
+			prevButton.TextColor = ThumpColors.OnBackground;
+			prevButton.BackgroundColor = Colors.Transparent;
+			prevButton.FontSize = 18;
+			prevButton.WidthRequest = 44;
+			prevButton.HeightRequest = 48;
+			prevButton.Clicked += OnPrevClicked;
+			controlsStack.Children.Add(prevButton);
+
 			m_playPauseButton = new Button();
 			m_playPauseButton.Text = "▶";
 			m_playPauseButton.TextColor = ThumpColors.OnBackground;
@@ -110,9 +124,20 @@ namespace Thump.Views
 			m_playPauseButton.WidthRequest = 48;
 			m_playPauseButton.HeightRequest = 48;
 			m_playPauseButton.Clicked += OnPlayPauseClicked;
+			controlsStack.Children.Add(m_playPauseButton);
 
-			Grid.SetColumn(m_playPauseButton, 2);
-			return m_playPauseButton;
+			Button nextButton = new Button();
+			nextButton.Text = "⏭";
+			nextButton.TextColor = ThumpColors.OnBackground;
+			nextButton.BackgroundColor = Colors.Transparent;
+			nextButton.FontSize = 18;
+			nextButton.WidthRequest = 44;
+			nextButton.HeightRequest = 48;
+			nextButton.Clicked += OnNextClicked;
+			controlsStack.Children.Add(nextButton);
+
+			Grid.SetColumn(controlsStack, 2);
+			return controlsStack;
 		}
 
 		public override void Initialize()
@@ -161,6 +186,16 @@ namespace Thump.Views
 		private void OnPlayPauseClicked(object sender, EventArgs e)
 		{
 			m_mainView.OnTogglePlayPause();
+		}
+
+		private void OnPrevClicked(object sender, EventArgs e)
+		{
+			m_mainView.OnPrevious();
+		}
+
+		private void OnNextClicked(object sender, EventArgs e)
+		{
+			m_mainView.OnNext();
 		}
 
 		private void OnExpandTapped(object sender, EventArgs e)

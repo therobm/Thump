@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
 using Thump.Pulse;
 
 namespace Thump.Views.Tiles
@@ -26,11 +27,15 @@ namespace Thump.Views.Tiles
 			textColumn.Width = GridLength.Star;
 			ColumnDefinition durationColumn = new ColumnDefinition();
 			durationColumn.Width = GridLength.Auto;
+			ColumnDefinition optionsColumn = new ColumnDefinition();
+			optionsColumn.Width = GridLength.Auto;
 			grid.ColumnDefinitions.Add(textColumn);
 			grid.ColumnDefinitions.Add(durationColumn);
+			grid.ColumnDefinitions.Add(optionsColumn);
 
 			grid.Children.Add(BuildText());
 			grid.Children.Add(BuildDuration());
+			grid.Children.Add(BuildOptions());
 
 			TapGestureRecognizer tap = new TapGestureRecognizer();
 			tap.Tapped += OnTapped;
@@ -75,6 +80,23 @@ namespace Thump.Views.Tiles
 			return m_durationLabel;
 		}
 
+		private View BuildOptions()
+		{
+			Button optionsButton = new Button();
+			optionsButton.Text = "⋮";
+			optionsButton.FontSize = 18;
+			optionsButton.TextColor = ThumpColors.TextSecondary;
+			optionsButton.BackgroundColor = Colors.Transparent;
+			optionsButton.WidthRequest = 40;
+			optionsButton.HeightRequest = 40;
+			optionsButton.Padding = new Thickness(0);
+			optionsButton.VerticalOptions = LayoutOptions.Center;
+			optionsButton.Clicked += OnOptionsClicked;
+
+			Grid.SetColumn(optionsButton, 2);
+			return optionsButton;
+		}
+
 		public override void Initialize()
 		{
 			base.Initialize();
@@ -117,6 +139,15 @@ namespace Thump.Views.Tiles
 				return;
 			}
 			m_mainView.OnTrackSelected(m_song);
+		}
+
+		private void OnOptionsClicked(object sender, EventArgs e)
+		{
+			if (m_song == null)
+			{
+				return;
+			}
+			m_mainView.OnTrackOptions(m_song);
 		}
 	}
 }

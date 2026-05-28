@@ -115,8 +115,33 @@ namespace Thump.Views
 			shuffleButton.Clicked += OnShuffleClicked;
 			buttonStack.Children.Add(shuffleButton);
 
-			Grid.SetRow(buttonStack, 2);
-			return buttonStack;
+			Button queueButton = new Button();
+			queueButton.Text = "＋  Queue";
+			queueButton.TextColor = ThumpColors.OnBackground;
+			queueButton.BackgroundColor = ThumpColors.Surface;
+			queueButton.CornerRadius = 8;
+			queueButton.FontSize = 14;
+			queueButton.Padding = new Thickness(20, 8);
+			queueButton.Clicked += OnAddToQueueClicked;
+			buttonStack.Children.Add(queueButton);
+
+			Button nextButton = new Button();
+			nextButton.Text = "⤓  Play Next";
+			nextButton.TextColor = ThumpColors.OnBackground;
+			nextButton.BackgroundColor = ThumpColors.Surface;
+			nextButton.CornerRadius = 8;
+			nextButton.FontSize = 14;
+			nextButton.Padding = new Thickness(20, 8);
+			nextButton.Clicked += OnPlayNextClicked;
+			buttonStack.Children.Add(nextButton);
+
+			ScrollView scroller = new ScrollView();
+			scroller.Orientation = ScrollOrientation.Horizontal;
+			scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Never;
+			scroller.Content = buttonStack;
+
+			Grid.SetRow(scroller, 2);
+			return scroller;
 		}
 
 		private View BuildTrackList()
@@ -154,7 +179,17 @@ namespace Thump.Views
 
 		private void OnShuffleClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnPlayTracks(m_tracks, 0);
+			m_mainView.OnPlayTracksShuffled(m_tracks);
+		}
+
+		private void OnAddToQueueClicked(object sender, EventArgs e)
+		{
+			m_mainView.OnAddToQueue(m_tracks);
+		}
+
+		private void OnPlayNextClicked(object sender, EventArgs e)
+		{
+			m_mainView.OnPlayNext(m_tracks);
 		}
 	}
 }
