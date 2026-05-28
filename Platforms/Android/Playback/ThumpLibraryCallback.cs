@@ -46,6 +46,13 @@ namespace Thump.Playback
 		{
 		}
 
+		public IListenableFuture OnPlaybackResumption(MediaSession mediaSession, MediaSession.ControllerInfo controller, bool isForPlayback)
+		{
+			// No saved-session resumption yet; decline so the framework doesn't try to resume.
+			FailedResolver resolver = new FailedResolver();
+			return (IListenableFuture)CallbackToFutureAdapter.GetFuture(resolver);
+		}
+
 
 		public IListenableFuture OnGetLibraryRoot(MediaLibraryService.MediaLibrarySession session, MediaSession.ControllerInfo browser, MediaLibraryService.LibraryParams libraryParams)
 		{
@@ -435,6 +442,15 @@ namespace Thump.Playback
 			{
 				List<MediaItem> resolved = new List<MediaItem>();
 				m_owner.ResolveSetItems(m_items, 0, resolved, m_startIndex, m_startPositionMs, completer);
+				return null;
+			}
+		}
+
+		private class FailedResolver : Java.Lang.Object, CallbackToFutureAdapter.IResolver
+		{
+			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
+			{
+				completer.SetException(new Java.Lang.UnsupportedOperationException("Playback resumption not supported."));
 				return null;
 			}
 		}

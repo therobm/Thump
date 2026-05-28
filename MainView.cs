@@ -534,16 +534,47 @@ namespace Thump
 
 		public void OnPlayArtist(PulseArtist artist, bool shuffle)
 		{
-			// TODO: real impl walks albums and concatenates tracks via async callbacks.
-			// For prototype, queue a single placeholder track tagged with the artist name
-			// so the mini-player reacts to the action.
-			PulseTrack stub = new PulseTrack();
-			stub.Title = artist.Name;
-			stub.Artist = "Various albums";
-			stub.Duration = 240;
-			List<PulseTrack> queue = new List<PulseTrack>();
-			queue.Add(stub);
-			OnPlayTracks(queue, 0);
+			if (artist == null)
+			{
+				return;
+			}
+			m_data.GetAlbumsForArtist(artist, (albums) =>
+			{
+				if (albums == null || albums.Count == 0)
+				{
+					return;
+				}
+				List<PulseTrack> combined = new List<PulseTrack>();
+				AccumulateArtistTracks(albums, 0, combined, shuffle);
+			});
+		}
+
+		private void AccumulateArtistTracks(List<PulseAlbum> albums, int index, List<PulseTrack> combined, bool shuffle)
+		{
+			if (index >= albums.Count)
+			{
+				if (combined.Count == 0)
+				{
+					return;
+				}
+				if (shuffle)
+				{
+					OnPlayTracksShuffled(combined);
+				}
+				else
+				{
+					OnPlayTracks(combined, 0);
+				}
+				return;
+			}
+			m_data.GetTracksForAlbum(albums[index], (tracks) =>
+			{
+				if (tracks != null)
+				{
+					combined.AddRange(tracks);
+				}
+				AccumulateArtistTracks(albums, index + 1, combined, shuffle);
+			});
 		}
 
 		public PulseTrack GetCurrentTrack()
