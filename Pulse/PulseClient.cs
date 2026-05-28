@@ -378,27 +378,43 @@ namespace Thump.Pulse
 
 		public void GetAlbums(Action<List<PulseAlbum>> onComplete)
 		{
-			// Placeholder preview data: no library-albums route exists yet.
-			List<PulseAlbum> results = BuildPlaceholderAlbums();
-			MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
-		}
-
-		private List<PulseAlbum> BuildPlaceholderAlbums()
-		{
-			List<PulseAlbum> albums = new List<PulseAlbum>();
-			albums.Add(MakePlaceholderAlbum("ph-album-1", "Midnight Geometry", "Aurora Sky", 2023, 11));
-			albums.Add(MakePlaceholderAlbum("ph-album-2", "Coastlines", "The Pale Hours", 2021, 9));
-			albums.Add(MakePlaceholderAlbum("ph-album-3", "Neon Cartography", "Vector Field", 2024, 13));
-			albums.Add(MakePlaceholderAlbum("ph-album-4", "Slow Tide", "Marigold", 2019, 8));
-			albums.Add(MakePlaceholderAlbum("ph-album-5", "Paper Cities", "North Bell", 2022, 10));
-			albums.Add(MakePlaceholderAlbum("ph-album-6", "Quiet Engines", "Halcyon Drift", 2020, 12));
-			albums.Add(MakePlaceholderAlbum("ph-album-7", "Glass Apartments", "Saffron", 2023, 7));
-			albums.Add(MakePlaceholderAlbum("ph-album-8", "Borrowed Light", "Evening Standard", 2018, 14));
-			albums.Add(MakePlaceholderAlbum("ph-album-9", "Threshold", "Cobalt Lake", 2024, 10));
-			albums.Add(MakePlaceholderAlbum("ph-album-10", "Wildflower Static", "Junewren", 2021, 9));
-			albums.Add(MakePlaceholderAlbum("ph-album-11", "Afterimage", "The Lyon Set", 2022, 11));
-			albums.Add(MakePlaceholderAlbum("ph-album-12", "Long Division", "Pacific Theory", 2017, 13));
-			return albums;
+			Task.Run(() =>
+			{
+				List<PulseAlbum> results = new List<PulseAlbum>();
+				try
+				{
+					for (int page = 0; page < 200; page++)
+					{
+						int offset = page * 500;
+						if (!SubsonicGet("getAlbumList2", out JsonElement response, "type=alphabeticalByName&size=500&offset=" + offset))
+						{
+							break;
+						}
+						int pageCount = 0;
+						if (response.TryGetProperty("albumList2", out JsonElement albumList) &&
+							albumList.TryGetProperty("album", out JsonElement albumArray) &&
+							albumArray.ValueKind == JsonValueKind.Array)
+						{
+							foreach (JsonElement element in albumArray.EnumerateArray())
+							{
+								results.Add(ParseAlbum(element));
+								pageCount++;
+							}
+						}
+						if (pageCount < 500)
+						{
+							break;
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				List<PulseAlbum> captured = results;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
+			});
 		}
 
 		private PulseAlbum MakePlaceholderAlbum(string id, string name, string artist, int year, int songCount)
@@ -858,42 +874,68 @@ namespace Thump.Pulse
 	
 		public void GetRecentlyAdded(Action<List<PulseObject>> onComplete)
 		{
-			// Placeholder preview data: no recently-added route exists yet.
-			List<PulseObject> results = new List<PulseObject>();
-			results.Add(MakePlaceholderAlbum("ph-recent-1", "Ember Season", "Lantern Field", 2024, 10));
-			results.Add(MakePlaceholderAlbum("ph-recent-2", "Static Bloom", "Tidewell", 2024, 8));
-			results.Add(MakePlaceholderAlbum("ph-recent-3", "Cassette Sun", "Maple & Wren", 2024, 12));
-			results.Add(MakePlaceholderAlbum("ph-recent-4", "Soft Machinery", "The Hollows", 2023, 9));
-			results.Add(MakePlaceholderAlbum("ph-recent-5", "Driftwood Radio", "Otto Grey", 2023, 11));
-			results.Add(MakePlaceholderAlbum("ph-recent-6", "Northern Letters", "Sable Coast", 2024, 7));
-			results.Add(MakePlaceholderAlbum("ph-recent-7", "Velvet Antenna", "Cinder Lane", 2023, 13));
-			results.Add(MakePlaceholderAlbum("ph-recent-8", "Gentle Riot", "Postcard Town", 2024, 10));
-			MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
+			Task.Run(() =>
+			{
+				List<PulseObject> results = new List<PulseObject>();
+				try
+				{
+					if (SubsonicGet("getAlbumList2", out JsonElement response, "type=newest&size=50"))
+					{
+						if (response.TryGetProperty("albumList2", out JsonElement albumList) &&
+							albumList.TryGetProperty("album", out JsonElement albumArray) &&
+							albumArray.ValueKind == JsonValueKind.Array)
+						{
+							foreach (JsonElement element in albumArray.EnumerateArray())
+							{
+								results.Add(ParseAlbum(element));
+							}
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				List<PulseObject> captured = results;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
+			});
 		}
 
 		public void GetGenres(Action<List<PulseGenre>> onComplete)
 		{
-			// Placeholder preview data: no genres route exists yet.
-			List<PulseGenre> results = new List<PulseGenre>();
-			results.Add(MakePlaceholderGenre("Indie Rock", 482, 53));
-			results.Add(MakePlaceholderGenre("Electronic", 671, 74));
-			results.Add(MakePlaceholderGenre("Jazz", 318, 41));
-			results.Add(MakePlaceholderGenre("Ambient", 207, 29));
-			results.Add(MakePlaceholderGenre("Hip-Hop", 540, 62));
-			results.Add(MakePlaceholderGenre("Classical", 396, 47));
-			results.Add(MakePlaceholderGenre("Folk", 245, 33));
-			results.Add(MakePlaceholderGenre("Synthwave", 168, 22));
-			MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
-		}
-
-		private PulseGenre MakePlaceholderGenre(string name, int songCount, int albumCount)
-		{
-			PulseGenre genre = new PulseGenre();
-			genre.Id = name;
-			genre.Name = name;
-			genre.SongCount = songCount;
-			genre.AlbumCount = albumCount;
-			return genre;
+			Task.Run(() =>
+			{
+				List<PulseGenre> results = new List<PulseGenre>();
+				try
+				{
+					if (SubsonicGet("getGenres", out JsonElement response))
+					{
+						if (response.TryGetProperty("genres", out JsonElement genres) &&
+							genres.TryGetProperty("genre", out JsonElement genreArray) &&
+							genreArray.ValueKind == JsonValueKind.Array)
+						{
+							foreach (JsonElement element in genreArray.EnumerateArray())
+							{
+								string value = JsonHelper.GetString(element, "value");
+								PulseGenre genre = new PulseGenre();
+								genre.Id = value;
+								genre.Name = value;
+								genre.SongCount = JsonHelper.GetInt(element, "songCount");
+								genre.AlbumCount = JsonHelper.GetInt(element, "albumCount");
+								results.Add(genre);
+							}
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				List<PulseGenre> captured = results;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
+			});
 		}
 
 		public void GetTopItems(Action<List<PulseObject>> onComplete)
