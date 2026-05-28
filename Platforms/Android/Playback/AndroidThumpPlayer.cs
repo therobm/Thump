@@ -320,6 +320,11 @@ namespace Thump.Playback
 			}
 			int generation = m_generation;
 			int insertAt = m_controller.CurrentMediaItemIndex + 1;
+			int count = m_controller.MediaItemCount;
+			if (insertAt > count)
+			{
+				insertAt = count;
+			}
 			InsertQueueItem(tracks, 0, insertAt, generation);
 		}
 
