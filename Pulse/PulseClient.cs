@@ -961,7 +961,33 @@ namespace Thump.Pulse
 
 		public void GetTracksForGenre(string genre, Action<List<PulseTrack>> onComplete)
 		{
-			MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+			Task.Run(() =>
+			{
+				List<PulseTrack> results = new List<PulseTrack>();
+				try
+				{
+					string param = "genre=" + Uri.EscapeDataString(genre) + "&count=500&offset=0";
+					if (SubsonicGet("getSongsByGenre", out JsonElement response, param))
+					{
+						if (response.TryGetProperty("songsByGenre", out JsonElement songsByGenre) &&
+							songsByGenre.TryGetProperty("song", out JsonElement songArray) &&
+							songArray.ValueKind == JsonValueKind.Array)
+						{
+							foreach (JsonElement element in songArray.EnumerateArray())
+							{
+								results.Add(ParseSong(element));
+							}
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				List<PulseTrack> captured = results;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
+			});
 		}
 
 		public void GetFavorites(Action<List<PulseTrack>> onComplete)
