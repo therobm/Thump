@@ -413,6 +413,8 @@ namespace Thump.Playback
 				m_serviceData.GetAlbumsForArtist(artist, (albums) =>
 				{
 					List<MediaItem> items = new List<MediaItem>();
+					items.Add(BuildPlayableItem("artistplay/" + value, "Play all", ""));
+					items.Add(BuildPlayableItem("artistshuffle/" + value, "Shuffle", ""));
 					if (albums != null)
 					{
 						for (int idx = 0; idx < albums.Count; idx++)
@@ -431,7 +433,7 @@ namespace Thump.Playback
 				genre.Name = value;
 				m_serviceData.GetTracksForGenre(genre, (tracks) =>
 				{
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(tracks), styleParams));
+					completer.Set(LibraryResult.OfItemList(BuildCollectionItems("genreplay/" + value, "genreshuffle/" + value, tracks), styleParams));
 				});
 				return;
 			}
@@ -562,7 +564,7 @@ namespace Thump.Playback
 
 		private void FetchCollectionTracks(CollectionRequest request, System.Action<List<PulseTrack>> onTracks)
 		{
-			if (request.IsPlaylist)
+			if (request.Kind == eCollectionKind.Playlist)
 			{
 				m_serviceData.GetPlaylist(request.Id, (playlist) =>
 				{
@@ -579,6 +581,21 @@ namespace Thump.Playback
 				});
 				return;
 			}
+			if (request.Kind == eCollectionKind.Genre)
+			{
+				PulseGenre genre = new PulseGenre();
+				genre.Name = request.Id;
+				m_serviceData.GetTracksForGenre(genre, (tracks) =>
+				{
+					DeliverCollectionTracks(request, tracks, onTracks);
+				});
+				return;
+			}
+			if (request.Kind == eCollectionKind.Artist)
+			{
+				FetchArtistCollectionTracks(request, onTracks);
+				return;
+			}
 			m_serviceData.GetAlbum(request.Id, (album) =>
 			{
 				List<PulseTrack> songs;
@@ -591,6 +608,80 @@ namespace Thump.Playback
 					songs = album.Songs;
 				}
 				DeliverCollectionTracks(request, songs, onTracks);
+			});
+		}
+
+		private void FetchArtistCollectionTracks(CollectionRequest request, System.Action<List<PulseTrack>> onTracks)
+		{
+			PulseArtist artist = new PulseArtist();
+			artist.Id = request.Id;
+			m_serviceData.GetAlbumsForArtist(artist, (albums) =>
+			{
+				List<PulseAlbum> albumList;
+				if (albums == null)
+				{
+					albumList = new List<PulseAlbum>();
+				}
+				else
+				{
+					albumList = albums;
+				}
+				int albumCount = albumList.Count;
+				if (albumCount == 0)
+				{
+					DeliverCollectionTracks(request, new List<PulseTrack>(), onTracks);
+					return;
+				}
+				object gate = new object();
+				List<List<PulseTrack>> albumSongs = new List<List<PulseTrack>>();
+				bool[] albumDelivered = new bool[albumCount];
+				for (int idx = 0; idx < albumCount; idx++)
+				{
+					albumSongs.Add(new List<PulseTrack>());
+					albumDelivered[idx] = false;
+				}
+				int pendingAlbums = albumCount;
+				for (int idx = 0; idx < albumCount; idx++)
+				{
+					int albumIndex = idx;
+					PulseAlbum album = albumList[albumIndex];
+					m_serviceData.GetAlbum(album.Id, (fetched) =>
+					{
+						lock (gate)
+						{
+							if (albumDelivered[albumIndex])
+							{
+								return;
+							}
+							albumDelivered[albumIndex] = true;
+							if (fetched != null)
+							{
+								List<PulseTrack> fetchedSongs = fetched.Songs;
+								if (fetchedSongs != null)
+								{
+									for (int songIdx = 0; songIdx < fetchedSongs.Count; songIdx++)
+									{
+										albumSongs[albumIndex].Add(fetchedSongs[songIdx]);
+									}
+								}
+							}
+							pendingAlbums = pendingAlbums - 1;
+							if (pendingAlbums == 0)
+							{
+								List<PulseTrack> combined = new List<PulseTrack>();
+								for (int collectIdx = 0; collectIdx < albumCount; collectIdx++)
+								{
+									List<PulseTrack> slot = albumSongs[collectIdx];
+									for (int songIdx = 0; songIdx < slot.Count; songIdx++)
+									{
+										combined.Add(slot[songIdx]);
+									}
+								}
+								DeliverCollectionTracks(request, combined, onTracks);
+							}
+						}
+					});
+				}
 			});
 		}
 
@@ -634,7 +725,7 @@ namespace Thump.Playback
 		{
 			CollectionRequest request = new CollectionRequest();
 			request.IsCollection = false;
-			request.IsPlaylist = false;
+			request.Kind = eCollectionKind.Album;
 			request.IsShuffle = false;
 			request.Id = "";
 			if (string.IsNullOrEmpty(mediaId))
@@ -644,7 +735,7 @@ namespace Thump.Playback
 			if (mediaId.StartsWith("albumplay/"))
 			{
 				request.IsCollection = true;
-				request.IsPlaylist = false;
+				request.Kind = eCollectionKind.Album;
 				request.IsShuffle = false;
 				request.Id = mediaId.Substring("albumplay/".Length);
 				return request;
@@ -652,7 +743,7 @@ namespace Thump.Playback
 			if (mediaId.StartsWith("albumshuffle/"))
 			{
 				request.IsCollection = true;
-				request.IsPlaylist = false;
+				request.Kind = eCollectionKind.Album;
 				request.IsShuffle = true;
 				request.Id = mediaId.Substring("albumshuffle/".Length);
 				return request;
@@ -660,7 +751,7 @@ namespace Thump.Playback
 			if (mediaId.StartsWith("playlistplay/"))
 			{
 				request.IsCollection = true;
-				request.IsPlaylist = true;
+				request.Kind = eCollectionKind.Playlist;
 				request.IsShuffle = false;
 				request.Id = mediaId.Substring("playlistplay/".Length);
 				return request;
@@ -668,9 +759,41 @@ namespace Thump.Playback
 			if (mediaId.StartsWith("playlistshuffle/"))
 			{
 				request.IsCollection = true;
-				request.IsPlaylist = true;
+				request.Kind = eCollectionKind.Playlist;
 				request.IsShuffle = true;
 				request.Id = mediaId.Substring("playlistshuffle/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("artistplay/"))
+			{
+				request.IsCollection = true;
+				request.Kind = eCollectionKind.Artist;
+				request.IsShuffle = false;
+				request.Id = mediaId.Substring("artistplay/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("artistshuffle/"))
+			{
+				request.IsCollection = true;
+				request.Kind = eCollectionKind.Artist;
+				request.IsShuffle = true;
+				request.Id = mediaId.Substring("artistshuffle/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("genreplay/"))
+			{
+				request.IsCollection = true;
+				request.Kind = eCollectionKind.Genre;
+				request.IsShuffle = false;
+				request.Id = mediaId.Substring("genreplay/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("genreshuffle/"))
+			{
+				request.IsCollection = true;
+				request.Kind = eCollectionKind.Genre;
+				request.IsShuffle = true;
+				request.Id = mediaId.Substring("genreshuffle/".Length);
 				return request;
 			}
 			return request;
@@ -986,10 +1109,18 @@ namespace Thump.Playback
 			return mediaId.Substring("track/".Length);
 		}
 
+		private enum eCollectionKind
+		{
+			Album,
+			Playlist,
+			Artist,
+			Genre
+		}
+
 		private class CollectionRequest
 		{
 			public bool IsCollection;
-			public bool IsPlaylist;
+			public eCollectionKind Kind;
 			public bool IsShuffle;
 			public string Id;
 		}
