@@ -156,7 +156,7 @@ namespace Thump.Pulse
 
 			m_baseUrl = prefix + ip + ":" + port;
 			m_user = username;
-			m_apiParams = "u=" + m_user + "&p=enc:"+ password + "&v=1.13.0&c=PulseMaui&f=json";
+			m_apiParams = "u=" + Uri.EscapeDataString(m_user) + "&p=enc:" + Uri.EscapeDataString(password) + "&v=1.13.0&c=PulseMaui&f=json";
 			m_authType = authType;
 
 			if (m_httpClient != null)
@@ -608,7 +608,7 @@ namespace Thump.Pulse
 				bool ok = false;
 				try
 				{
-					string url = m_baseUrl + "/pulse/markPlaylistPlayed?id=" + Uri.EscapeDataString(playlistId) + "&u=" + m_user;
+					string url = m_baseUrl + "/pulse/markPlaylistPlayed?id=" + Uri.EscapeDataString(playlistId) + "&u=" + Uri.EscapeDataString(m_user);
 					string json = HttpGet(url);
 					ok = json != null;
 				}
@@ -829,7 +829,7 @@ namespace Thump.Pulse
 				try
 				{
 					int count = 50;
-					string url = m_baseUrl + "/pulse/recentlyPlayed?count=" + count + "&u=" + m_user;
+					string url = m_baseUrl + "/pulse/recentlyPlayed?count=" + count + "&u=" + Uri.EscapeDataString(m_user);
 					string json = HttpGet(url);
 					if (json != null)
 					{
@@ -861,7 +861,7 @@ namespace Thump.Pulse
 				try
 				{
 					int count = 50;
-					string url = m_baseUrl + "/pulse/popularArtists?count=" + count + "&u=" + m_user;
+					string url = m_baseUrl + "/pulse/popularArtists?count=" + count + "&u=" + Uri.EscapeDataString(m_user);
 					string json = HttpGet(url);
 					if (json != null)
 					{
@@ -977,7 +977,7 @@ namespace Thump.Pulse
 				try
 				{
 					int count = 50;
-					string url = m_baseUrl + "/pulse/topPlaylists?count=" + count + "&u=" + m_user;
+					string url = m_baseUrl + "/pulse/topPlaylists?count=" + count + "&u=" + Uri.EscapeDataString(m_user);
 					string json = HttpGet(url);
 					if (json != null)
 					{
@@ -1045,7 +1045,7 @@ namespace Thump.Pulse
 				List<PulsePlaylist> results = new List<PulsePlaylist>();
 				try
 				{
-					string url = m_baseUrl + "/pulse/" + endpoint + "?count=" + count + "&u=" + m_user;
+					string url = m_baseUrl + "/pulse/" + endpoint + "?count=" + count + "&u=" + Uri.EscapeDataString(m_user);
 					string json = HttpGet(url);
 					if (json != null)
 					{
