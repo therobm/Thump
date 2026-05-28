@@ -79,7 +79,7 @@ namespace Thump
 
 
 			m_pulseClient = new PulseClient();
-			m_pulseClient.SetServerParams("192.168.5.5","32458", "Rob", "asdf", PulseClient.eSubSonicAuthType.Token, true);
+			m_pulseClient.SetServerParams(ThumpSettings.GetServerIp(), ThumpSettings.GetServerPort(), ThumpSettings.GetUsername(), ThumpSettings.GetPassword(), ThumpSettings.GetAuthType(), true);
 
 
 			string cacheRoot = FileSystem.CacheDirectory;
