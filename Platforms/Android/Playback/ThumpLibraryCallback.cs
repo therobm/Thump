@@ -41,6 +41,21 @@ namespace Thump.Playback
 
 		public void OnDisconnected(MediaSession session, MediaSession.ControllerInfo controller)
 		{
+			bool isCarController = session.IsAutoCompanionController(controller) || session.IsAutomotiveController(controller);
+			if (!isCarController)
+			{
+				return;
+			}
+			IPlayer player = session.Player;
+			if (player == null)
+			{
+				return;
+			}
+			if (!player.IsPlaying)
+			{
+				return;
+			}
+			player.Pause();
 		}
 
 		public int OnPlayerCommandRequest(MediaSession session, MediaSession.ControllerInfo controller, int playerCommand)
