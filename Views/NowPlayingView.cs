@@ -224,11 +224,10 @@ namespace Thump.Views
 			controlsStack.Children.Add(prevButton);
 
 			m_playPauseButton = new Button();
-			m_playPauseButton.Text = "▶";
+			m_playPauseButton.Text = "\u25B6\uFE0E";
 			m_playPauseButton.FontSize = 32;
-			m_playPauseButton.TextColor = ThumpColors.Background;
-			m_playPauseButton.BackgroundColor = ThumpColors.Accent;
-			m_playPauseButton.CornerRadius = 38;
+			m_playPauseButton.TextColor = ThumpColors.OnBackground;
+			m_playPauseButton.BackgroundColor = Colors.Transparent;
 			m_playPauseButton.WidthRequest = 76;
 			m_playPauseButton.HeightRequest = 76;
 			m_playPauseButton.VerticalOptions = LayoutOptions.Center;
@@ -325,11 +324,11 @@ namespace Thump.Views
 		{
 			if (playing)
 			{
-				m_playPauseButton.Text = "⏸";
+				m_playPauseButton.Text = "\u23F8\uFE0E";
 			}
 			else
 			{
-				m_playPauseButton.Text = "▶";
+				m_playPauseButton.Text = "\u25B6\uFE0E";
 			}
 		}
 
