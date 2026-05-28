@@ -14,10 +14,10 @@ namespace Thump.Views
 
 		public MiniPlayer(MainView mainView) : base(mainView)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Surface;
 			HeightRequest = 64;

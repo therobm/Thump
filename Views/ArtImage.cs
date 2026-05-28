@@ -11,15 +11,15 @@ namespace Thump.Views
 
 		public ArtImage() : base(MainView.Self)
 		{
-			BuildLayout();
+			
 		}
 
 		public ArtImage(MainView mainView) : base(mainView)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			m_image = new Image();
 			m_image.Aspect = Aspect.AspectFill;

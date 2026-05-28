@@ -20,11 +20,11 @@ namespace Thump.Views
 		public ArtistDetailView(MainView mainView, PulseArtist artist) : base(mainView)
 		{
 			m_artist = artist;
-			BuildLayout();
+			
 			m_art.MakeCircular();
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

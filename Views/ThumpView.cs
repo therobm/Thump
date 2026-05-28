@@ -9,10 +9,19 @@ namespace Thump.Views
 		public ThumpView(MainView mainView)
 		{
 			m_mainView = mainView;
-		}
+            BuildLayout();
+        }
 
+        protected virtual void BuildLayout()
+        {
+
+        }
+        
 		public virtual void Initialize()
 		{
 		}
-	}
+
+		
+
+    }
 }

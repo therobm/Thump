@@ -20,10 +20,10 @@ namespace Thump.Views
 		public PlaylistDetailView(MainView mainView, PulsePlaylist playlist) : base(mainView)
 		{
 			m_playlist = playlist;
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

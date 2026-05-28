@@ -16,10 +16,10 @@ namespace Thump.Views.Tiles
 
 		public HomeCarouselTile() : base(MainView.Self)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			WidthRequest = 140;
 

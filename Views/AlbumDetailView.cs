@@ -21,10 +21,10 @@ namespace Thump.Views
 		public AlbumDetailView(MainView mainView, PulseAlbum album) : base(mainView)
 		{
 			m_album = album;
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

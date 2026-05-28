@@ -16,10 +16,10 @@ namespace Thump.Views
 
 		public HomeView(MainView mainView) : base(mainView)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

@@ -18,10 +18,10 @@ namespace Thump.Views
 
 		public NowPlayingView(MainView mainView) : base(mainView)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

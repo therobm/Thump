@@ -19,10 +19,9 @@ namespace Thump.Views
 		public GenreDetailView(MainView mainView, PulseGenre genre) : base(mainView)
 		{
 			m_genre = genre;
-			BuildLayout();
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = ThumpColors.Background;
 

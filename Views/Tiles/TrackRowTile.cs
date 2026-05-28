@@ -14,10 +14,10 @@ namespace Thump.Views.Tiles
 
 		public TrackRowTile() : base(MainView.Self)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			Grid grid = new Grid();
 			grid.Padding = new Thickness(16, 8);

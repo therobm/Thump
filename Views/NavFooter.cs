@@ -18,10 +18,10 @@ namespace Thump.Views
 
 		public NavFooter(MainView mainView) : base(mainView)
 		{
-			BuildLayout();
+			
 		}
 
-		private void BuildLayout()
+		protected override void BuildLayout()
 		{
 			BackgroundColor = Color.FromArgb("#060606");
 			HeightRequest = 72;
