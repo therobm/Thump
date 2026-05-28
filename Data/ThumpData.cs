@@ -333,6 +333,24 @@ namespace Thump.Data
 			m_pulseClient.Search(query, callback);
 		}
 
+		public void StarTrack(string trackId, Action<bool> callback)
+		{
+			if (callback == null)
+			{
+				return;
+			}
+			m_pulseClient.Star(trackId, callback);
+		}
+
+		public void UnstarTrack(string trackId, Action<bool> callback)
+		{
+			if (callback == null)
+			{
+				return;
+			}
+			m_pulseClient.Unstar(trackId, callback);
+		}
+
 		public void GetCoverArt(string coverArtId, Action<byte[]> callback)
 		{
 			if (callback == null)

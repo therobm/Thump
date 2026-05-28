@@ -37,6 +37,7 @@ namespace Thump.Pulse
 		public string AlbumId { get; set; }
 		public string CoverArt { private get; set; }
 		public int Duration { get; set; }
+		public bool Starred { get; set; }
 
 		public PulseTrack()
 		{
@@ -464,6 +465,46 @@ namespace Thump.Pulse
 			});
 		}
 
+		public void Star(string trackId, Action<bool> onComplete)
+		{
+			Task.Run(() =>
+			{
+				bool ok = false;
+				try
+				{
+					string param = "id=" + Uri.EscapeDataString(trackId);
+					ok = SubsonicGet("star", out JsonElement response, param);
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				bool result = ok;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
+			});
+		}
+
+		public void Unstar(string trackId, Action<bool> onComplete)
+		{
+			Task.Run(() =>
+			{
+				bool ok = false;
+				try
+				{
+					string param = "id=" + Uri.EscapeDataString(trackId);
+					ok = SubsonicGet("unstar", out JsonElement response, param);
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+				}
+				bool result = ok;
+				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
+			});
+		}
+
 		public void DeletePlaylist(string playlistId, Action<bool> onComplete)
 		{
 			Task.Run(() =>
@@ -674,6 +715,8 @@ namespace Thump.Pulse
 			song.AlbumId = JsonHelper.GetString(element, "albumId");
 			song.CoverArt = JsonHelper.GetString(element, "coverArt");
 			song.Duration = JsonHelper.GetInt(element, "duration");
+			string starredValue = JsonHelper.GetString(element, "starred");
+			song.Starred = !string.IsNullOrEmpty(starredValue);
 			return song;
 		}
 

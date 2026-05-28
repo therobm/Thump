@@ -22,6 +22,8 @@ namespace Thump.Views
 		private Button m_shuffleButton;
 		private Button m_repeatButton;
 		private CollectionView m_queueList;
+		private Button m_favoriteButton;
+		private PulseTrack m_currentSong;
 		private bool m_showingQueue;
 		private bool m_userSeeking;
 
@@ -266,15 +268,15 @@ namespace Thump.Views
 			actionsStack.HorizontalOptions = LayoutOptions.Center;
 			actionsStack.Padding = new Thickness(0, 0, 0, 16);
 
-			Button favoriteButton = new Button();
-			favoriteButton.Text = "♡  Favorite";
-			favoriteButton.TextColor = ThumpColors.TextSecondary;
-			favoriteButton.BackgroundColor = Colors.Transparent;
-			favoriteButton.FontSize = 16;
-			favoriteButton.HeightRequest = 48;
-			favoriteButton.Padding = new Thickness(16, 8);
-			favoriteButton.Clicked += OnFavoriteClicked;
-			actionsStack.Children.Add(favoriteButton);
+			m_favoriteButton = new Button();
+			m_favoriteButton.Text = "♡  Favorite";
+			m_favoriteButton.TextColor = ThumpColors.TextSecondary;
+			m_favoriteButton.BackgroundColor = Colors.Transparent;
+			m_favoriteButton.FontSize = 16;
+			m_favoriteButton.HeightRequest = 48;
+			m_favoriteButton.Padding = new Thickness(16, 8);
+			m_favoriteButton.Clicked += OnFavoriteClicked;
+			actionsStack.Children.Add(m_favoriteButton);
 
 			Button queueButton = new Button();
 			queueButton.Text = "≣  Queue";
@@ -300,6 +302,8 @@ namespace Thump.Views
 
 		public void SetTrack(PulseTrack song)
 		{
+			m_currentSong = song;
+			UpdateFavoriteButton();
 			if (song == null)
 			{
 				m_titleLabel.Text = "Nothing playing";
@@ -416,6 +420,51 @@ namespace Thump.Views
 
 		private void OnFavoriteClicked(object sender, EventArgs e)
 		{
+			if (m_currentSong == null || string.IsNullOrEmpty(m_currentSong.Id))
+			{
+				return;
+			}
+			PulseTrack song = m_currentSong;
+			if (song.Starred)
+			{
+				MainView.Data.UnstarTrack(song.Id, (success) =>
+				{
+					if (success)
+					{
+						song.Starred = false;
+						UpdateFavoriteButton();
+					}
+				});
+			}
+			else
+			{
+				MainView.Data.StarTrack(song.Id, (success) =>
+				{
+					if (success)
+					{
+						song.Starred = true;
+						UpdateFavoriteButton();
+					}
+				});
+			}
+		}
+
+		private void UpdateFavoriteButton()
+		{
+			if (m_favoriteButton == null)
+			{
+				return;
+			}
+			if (m_currentSong != null && m_currentSong.Starred)
+			{
+				m_favoriteButton.Text = "♥  Favorite";
+				m_favoriteButton.TextColor = ThumpColors.Accent;
+			}
+			else
+			{
+				m_favoriteButton.Text = "♡  Favorite";
+				m_favoriteButton.TextColor = ThumpColors.TextSecondary;
+			}
 		}
 
 		private void OnQueueClicked(object sender, EventArgs e)
