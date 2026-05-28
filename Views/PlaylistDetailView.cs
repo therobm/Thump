@@ -156,7 +156,21 @@ namespace Thump.Views
 			m_metaLabel.Text = m_playlist.SongCount + " tracks";
 			m_art.SetCoverArt(m_playlist.CoverArt);
 
-			m_tracks = m_playlist.Songs;
+			// The playlist from the list endpoint carries no tracks; fetch the full
+			// playlist (getPlaylist) which includes its songs.
+			MainView.Data.GetPlaylist(m_playlist.Id, OnPlaylistLoaded);
+		}
+
+		private void OnPlaylistLoaded(PulsePlaylist playlist)
+		{
+			if (playlist == null)
+			{
+				return;
+			}
+			m_playlist = playlist;
+			m_titleLabel.Text = playlist.Name;
+			m_metaLabel.Text = playlist.SongCount + " tracks";
+			m_tracks = playlist.Songs;
 			m_trackList.ItemsSource = m_tracks;
 		}
 
