@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
+using Thump.Playback;
 using Thump.Pulse;
+using Thump.Views.Tiles;
 
 namespace Thump.Views
 {
@@ -16,6 +19,10 @@ namespace Thump.Views
 		private Slider m_seekSlider;
 		private Label m_totalTimeLabel;
 		private Button m_playPauseButton;
+		private Button m_shuffleButton;
+		private Button m_repeatButton;
+		private CollectionView m_queueList;
+		private bool m_showingQueue;
 		private bool m_userSeeking;
 
 		public NowPlayingView(MainView mainView) : base(mainView)
@@ -41,6 +48,7 @@ namespace Thump.Views
 
 			grid.Children.Add(BuildHeader());
 			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildQueuePanel());
 			grid.Children.Add(BuildBottomBlock());
 
 			Content = grid;
@@ -75,6 +83,17 @@ namespace Thump.Views
 
 			Grid.SetRow(m_art, 1);
 			return m_art;
+		}
+
+		private View BuildQueuePanel()
+		{
+			m_queueList = new CollectionView();
+			m_queueList.ItemTemplate = new DataTemplate(typeof(QueueRowTile));
+			m_queueList.Margin = new Thickness(0, 8, 0, 8);
+			m_queueList.IsVisible = false;
+
+			Grid.SetRow(m_queueList, 1);
+			return m_queueList;
 		}
 
 		private View BuildBottomBlock()
@@ -182,16 +201,16 @@ namespace Thump.Views
 			controlsStack.HorizontalOptions = LayoutOptions.Center;
 			controlsStack.Padding = new Thickness(0, 8, 0, 8);
 
-			Button shuffleButton = new Button();
-			shuffleButton.Text = "⇋";
-			shuffleButton.FontSize = 26;
-			shuffleButton.TextColor = ThumpColors.TextSecondary;
-			shuffleButton.BackgroundColor = Colors.Transparent;
-			shuffleButton.WidthRequest = 56;
-			shuffleButton.HeightRequest = 56;
-			shuffleButton.VerticalOptions = LayoutOptions.Center;
-			shuffleButton.Clicked += OnShuffleClicked;
-			controlsStack.Children.Add(shuffleButton);
+			m_shuffleButton = new Button();
+			m_shuffleButton.Text = "⇋";
+			m_shuffleButton.FontSize = 26;
+			m_shuffleButton.TextColor = ThumpColors.TextSecondary;
+			m_shuffleButton.BackgroundColor = Colors.Transparent;
+			m_shuffleButton.WidthRequest = 56;
+			m_shuffleButton.HeightRequest = 56;
+			m_shuffleButton.VerticalOptions = LayoutOptions.Center;
+			m_shuffleButton.Clicked += OnShuffleClicked;
+			controlsStack.Children.Add(m_shuffleButton);
 
 			Button prevButton = new Button();
 			prevButton.Text = "⏮";
@@ -227,16 +246,16 @@ namespace Thump.Views
 			nextButton.Clicked += OnNextClicked;
 			controlsStack.Children.Add(nextButton);
 
-			Button repeatButton = new Button();
-			repeatButton.Text = "↻";
-			repeatButton.FontSize = 26;
-			repeatButton.TextColor = ThumpColors.TextSecondary;
-			repeatButton.BackgroundColor = Colors.Transparent;
-			repeatButton.WidthRequest = 56;
-			repeatButton.HeightRequest = 56;
-			repeatButton.VerticalOptions = LayoutOptions.Center;
-			repeatButton.Clicked += OnRepeatClicked;
-			controlsStack.Children.Add(repeatButton);
+			m_repeatButton = new Button();
+			m_repeatButton.Text = "↻";
+			m_repeatButton.FontSize = 26;
+			m_repeatButton.TextColor = ThumpColors.TextSecondary;
+			m_repeatButton.BackgroundColor = Colors.Transparent;
+			m_repeatButton.WidthRequest = 56;
+			m_repeatButton.HeightRequest = 56;
+			m_repeatButton.VerticalOptions = LayoutOptions.Center;
+			m_repeatButton.Clicked += OnRepeatClicked;
+			controlsStack.Children.Add(m_repeatButton);
 
 			return controlsStack;
 		}
@@ -274,8 +293,10 @@ namespace Thump.Views
 		public override void Initialize()
 		{
 			base.Initialize();
-			PulseTrack song = MainView.Self.GetCurrentTrack();
+			PulseTrack song = m_mainView.GetCurrentTrack();
 			SetTrack(song);
+			SetShuffleState(m_mainView.GetShuffleEnabled());
+			SetRepeatState(m_mainView.GetRepeatMode());
 		}
 
 		public void SetTrack(PulseTrack song)
@@ -297,6 +318,7 @@ namespace Thump.Views
 			m_totalTimeLabel.Text = FormatDuration(song.Duration);
 			m_seekSlider.Value = 0;
 			m_art.SetCoverArt(song.ImageID);
+			RefreshQueue();
 		}
 
 		public void SetPlaying(bool playing)
@@ -385,10 +407,12 @@ namespace Thump.Views
 
 		private void OnShuffleClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnToggleShuffle();
 		}
 
 		private void OnRepeatClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnCycleRepeat();
 		}
 
 		private void OnFavoriteClicked(object sender, EventArgs e)
@@ -397,6 +421,63 @@ namespace Thump.Views
 
 		private void OnQueueClicked(object sender, EventArgs e)
 		{
+			m_showingQueue = !m_showingQueue;
+			m_art.IsVisible = !m_showingQueue;
+			m_queueList.IsVisible = m_showingQueue;
+			if (m_showingQueue)
+			{
+				RefreshQueue();
+			}
+		}
+
+		public void SetShuffleState(bool enabled)
+		{
+			if (m_shuffleButton == null)
+			{
+				return;
+			}
+			if (enabled)
+			{
+				m_shuffleButton.TextColor = ThumpColors.Accent;
+			}
+			else
+			{
+				m_shuffleButton.TextColor = ThumpColors.TextSecondary;
+			}
+		}
+
+		public void SetRepeatState(eRepeatMode mode)
+		{
+			if (m_repeatButton == null)
+			{
+				return;
+			}
+			if (mode == eRepeatMode.One)
+			{
+				m_repeatButton.Text = "↻¹";
+				m_repeatButton.TextColor = ThumpColors.Accent;
+			}
+			else if (mode == eRepeatMode.All)
+			{
+				m_repeatButton.Text = "↻";
+				m_repeatButton.TextColor = ThumpColors.Accent;
+			}
+			else
+			{
+				m_repeatButton.Text = "↻";
+				m_repeatButton.TextColor = ThumpColors.TextSecondary;
+			}
+		}
+
+		public void RefreshQueue()
+		{
+			if (m_queueList == null || !m_showingQueue)
+			{
+				return;
+			}
+			List<PulseTrack> queue = m_mainView.GetQueue();
+			m_queueList.ItemsSource = null;
+			m_queueList.ItemsSource = queue;
 		}
 	}
 }
