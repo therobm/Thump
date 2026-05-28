@@ -660,6 +660,37 @@ namespace Thump.Pulse
 			});
 		}
 
+		public void GetTrackAudio(string trackId, Action<byte[]> onComplete)
+		{
+			if (string.IsNullOrEmpty(trackId))
+			{
+				onComplete(null);
+				return;
+			}
+			string url = BuildStreamUrl(trackId);
+			Task.Run(() =>
+			{
+				try
+				{
+					HttpResponseMessage response = m_httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, url)).Result;
+					if (!response.IsSuccessStatusCode)
+					{
+						Log.Error("Audio fetch failed: " + url + " status: " + response.StatusCode);
+						MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+						return;
+					}
+					byte[] data = response.Content.ReadAsByteArrayAsync().Result;
+					MainThread.BeginInvokeOnMainThread(() => { onComplete(data); });
+				}
+				catch (Exception ex)
+				{
+					Log.Exception(ex);
+					System.Diagnostics.Debugger.Break();
+					MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+				}
+			});
+		}
+
 		private bool SubsonicGet(string endpoint, out JsonElement jsonElement, string extraParams = null)
 		{
 			bool retVal = false;
