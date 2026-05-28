@@ -182,7 +182,11 @@ namespace Thump.Pulse
 
 		public void SetServerParams(string ip, string port, string username, string password, eSubSonicAuthType authType, bool enableSSL)
 		{
-			//todo validate these strings
+			// Accept an IP/host that may have been entered (or stored) with a
+			// scheme and/or trailing slash; strip them so the prefix derived from
+			// enableSSL is authoritative. Otherwise a value like "https://host"
+			// produced "http://https://host:port".
+			ip = ip.Trim().Replace("http://", "").Replace("https://", "").TrimEnd('/');
 
 			string prefix = "http://";
 			if (enableSSL)
