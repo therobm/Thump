@@ -90,7 +90,7 @@ namespace Thump.Playback
 				categories.Add(BuildBrowsableItem(s_homeId, "Home"));
 				categories.Add(BuildBrowsableItem(s_playlistsId, "Playlists"));
 				categories.Add(BuildBrowsableItem(s_libraryId, "Library"));
-				return ImmediateFuture(LibraryResult.OfItemList(categories, libraryParams));
+				return ImmediateFuture(LibraryResult.OfItemList(categories, BuildContentStyleParams()));
 			}
 
 			ChildrenResolver resolver = new ChildrenResolver(this, parentId, libraryParams);
@@ -99,6 +99,7 @@ namespace Thump.Playback
 
 		private void LoadChildren(string parentId, MediaLibraryService.LibraryParams libraryParams, CallbackToFutureAdapter.Completer completer)
 		{
+			MediaLibraryService.LibraryParams styleParams = BuildContentStyleParams();
 			if (parentId == s_homeId)
 			{
 				List<MediaItem> shelves = new List<MediaItem>();
@@ -106,7 +107,7 @@ namespace Thump.Playback
 				shelves.Add(BuildBrowsableItem(s_recentlyAddedId, "Recently Added"));
 				shelves.Add(BuildBrowsableItem(s_topPlaylistsId, "Top Playlists"));
 				shelves.Add(BuildBrowsableItem(s_popularArtistsId, "Popular Artists"));
-				completer.Set(LibraryResult.OfItemList(shelves, libraryParams));
+				completer.Set(LibraryResult.OfItemList(shelves, styleParams));
 				return;
 			}
 			if (parentId == s_libraryId)
@@ -115,7 +116,7 @@ namespace Thump.Playback
 				categories.Add(BuildBrowsableItem(s_artistsId, "Artists"));
 				categories.Add(BuildBrowsableItem(s_albumsId, "Albums"));
 				categories.Add(BuildBrowsableItem(s_genresId, "Genres"));
-				completer.Set(LibraryResult.OfItemList(categories, libraryParams));
+				completer.Set(LibraryResult.OfItemList(categories, styleParams));
 				return;
 			}
 			if (parentId == s_recentlyPlayedId)
@@ -128,7 +129,7 @@ namespace Thump.Playback
 						return;
 					}
 					delivered = true;
-					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), libraryParams));
+					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), styleParams));
 				});
 				return;
 			}
@@ -142,7 +143,7 @@ namespace Thump.Playback
 						return;
 					}
 					delivered = true;
-					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), libraryParams));
+					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), styleParams));
 				});
 				return;
 			}
@@ -165,7 +166,7 @@ namespace Thump.Playback
 							items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name, playlist.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -188,7 +189,7 @@ namespace Thump.Playback
 							items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name, artist.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -202,10 +203,10 @@ namespace Thump.Playback
 						for (int idx = 0; idx < albums.Count; idx++)
 						{
 							PulseAlbum album = albums[idx];
-							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
+							items.Add(BuildAlbumItem("album/" + album.Id, album.Name, album.Artist, album.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -222,7 +223,7 @@ namespace Thump.Playback
 							items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name, playlist.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -239,7 +240,7 @@ namespace Thump.Playback
 							items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name, artist.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -256,7 +257,7 @@ namespace Thump.Playback
 							items.Add(BuildBrowsableItem("genre/" + genre.Name, genre.Name));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -276,7 +277,7 @@ namespace Thump.Playback
 					{
 						songs = album.Songs;
 					}
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), libraryParams));
+					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), styleParams));
 				});
 				return;
 			}
@@ -293,7 +294,7 @@ namespace Thump.Playback
 					{
 						songs = playlist.Songs;
 					}
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), libraryParams));
+					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), styleParams));
 				});
 				return;
 			}
@@ -309,10 +310,10 @@ namespace Thump.Playback
 						for (int idx = 0; idx < albums.Count; idx++)
 						{
 							PulseAlbum album = albums[idx];
-							items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
+							items.Add(BuildAlbumItem("album/" + album.Id, album.Name, album.Artist, album.CoverArt));
 						}
 					}
-					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+					completer.Set(LibraryResult.OfItemList(items, styleParams));
 				});
 				return;
 			}
@@ -322,12 +323,12 @@ namespace Thump.Playback
 				genre.Name = value;
 				m_serviceData.GetTracksForGenre(genre, (tracks) =>
 				{
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(tracks), libraryParams));
+					completer.Set(LibraryResult.OfItemList(BuildTrackItems(tracks), styleParams));
 				});
 				return;
 			}
 
-			completer.Set(LibraryResult.OfItemList(new List<MediaItem>(), libraryParams));
+			completer.Set(LibraryResult.OfItemList(new List<MediaItem>(), styleParams));
 		}
 
 		public IListenableFuture OnAddMediaItems(MediaSession session, MediaSession.ControllerInfo controller, IList<MediaItem> mediaItems)
@@ -409,6 +410,16 @@ namespace Thump.Playback
 			return (IListenableFuture)CallbackToFutureAdapter.GetFuture(resolver);
 		}
 
+		private static MediaLibraryService.LibraryParams BuildContentStyleParams()
+		{
+			Android.OS.Bundle extras = new Android.OS.Bundle();
+			extras.PutInt(MediaConstants.ExtrasKeyContentStyleBrowsable, MediaConstants.ExtrasValueContentStyleGridItem);
+			extras.PutInt(MediaConstants.ExtrasKeyContentStylePlayable, MediaConstants.ExtrasValueContentStyleListItem);
+			MediaLibraryService.LibraryParams.Builder builder = new MediaLibraryService.LibraryParams.Builder();
+			builder.SetExtras(extras);
+			return builder.Build();
+		}
+
 		private static List<MediaItem> BuildTrackItems(List<PulseTrack> tracks)
 		{
 			List<MediaItem> items = new List<MediaItem>();
@@ -439,7 +450,7 @@ namespace Thump.Playback
 					case eDataType.Album:
 					{
 						PulseAlbum album = (PulseAlbum)pulseObject;
-						items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
+						items.Add(BuildAlbumItem("album/" + album.Id, album.Name, album.Artist, album.CoverArt));
 						break;
 					}
 					case eDataType.Artist:
@@ -484,6 +495,25 @@ namespace Thump.Playback
 		{
 			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
 			metadata.SetTitle(title);
+			metadata.SetIsBrowsable(Java.Lang.Boolean.True);
+			metadata.SetIsPlayable(Java.Lang.Boolean.False);
+			Android.Net.Uri artworkUri = BuildArtworkUri(coverArtId);
+			if (artworkUri != null)
+			{
+				metadata.SetArtworkUri(artworkUri);
+			}
+
+			MediaItem.Builder builder = new MediaItem.Builder();
+			builder.SetMediaId(mediaId);
+			builder.SetMediaMetadata(metadata.Build());
+			return builder.Build();
+		}
+
+		private static MediaItem BuildAlbumItem(string mediaId, string title, string subtitle, string coverArtId)
+		{
+			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
+			metadata.SetTitle(title);
+			metadata.SetSubtitle(subtitle);
 			metadata.SetIsBrowsable(Java.Lang.Boolean.True);
 			metadata.SetIsPlayable(Java.Lang.Boolean.False);
 			Android.Net.Uri artworkUri = BuildArtworkUri(coverArtId);
