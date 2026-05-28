@@ -11,10 +11,16 @@ namespace Thump.Playback
 	public class ThumpLibraryCallback : Java.Lang.Object, MediaLibraryService.MediaLibrarySession.ICallback
 	{
 		private const string s_rootId = "root";
+		private const string s_homeId = "home";
+		private const string s_libraryId = "library";
 		private const string s_albumsId = "albums";
 		private const string s_playlistsId = "playlists";
 		private const string s_artistsId = "artists";
 		private const string s_genresId = "genres";
+		private const string s_recentlyPlayedId = "home_recent";
+		private const string s_recentlyAddedId = "home_added";
+		private const string s_topPlaylistsId = "home_top";
+		private const string s_popularArtistsId = "home_popular";
 
 		private ThumpData m_serviceData;
 
@@ -81,10 +87,9 @@ namespace Thump.Playback
 			if (parentId == s_rootId)
 			{
 				List<MediaItem> categories = new List<MediaItem>();
-				categories.Add(BuildBrowsableItem(s_albumsId, "Albums"));
+				categories.Add(BuildBrowsableItem(s_homeId, "Home"));
 				categories.Add(BuildBrowsableItem(s_playlistsId, "Playlists"));
-				categories.Add(BuildBrowsableItem(s_artistsId, "Artists"));
-				categories.Add(BuildBrowsableItem(s_genresId, "Genres"));
+				categories.Add(BuildBrowsableItem(s_libraryId, "Library"));
 				return ImmediateFuture(LibraryResult.OfItemList(categories, libraryParams));
 			}
 
@@ -94,6 +99,99 @@ namespace Thump.Playback
 
 		private void LoadChildren(string parentId, MediaLibraryService.LibraryParams libraryParams, CallbackToFutureAdapter.Completer completer)
 		{
+			if (parentId == s_homeId)
+			{
+				List<MediaItem> shelves = new List<MediaItem>();
+				shelves.Add(BuildBrowsableItem(s_recentlyPlayedId, "Recently Played"));
+				shelves.Add(BuildBrowsableItem(s_recentlyAddedId, "Recently Added"));
+				shelves.Add(BuildBrowsableItem(s_topPlaylistsId, "Top Playlists"));
+				shelves.Add(BuildBrowsableItem(s_popularArtistsId, "Popular Artists"));
+				completer.Set(LibraryResult.OfItemList(shelves, libraryParams));
+				return;
+			}
+			if (parentId == s_libraryId)
+			{
+				List<MediaItem> categories = new List<MediaItem>();
+				categories.Add(BuildBrowsableItem(s_artistsId, "Artists"));
+				categories.Add(BuildBrowsableItem(s_albumsId, "Albums"));
+				categories.Add(BuildBrowsableItem(s_genresId, "Genres"));
+				completer.Set(LibraryResult.OfItemList(categories, libraryParams));
+				return;
+			}
+			if (parentId == s_recentlyPlayedId)
+			{
+				bool delivered = false;
+				m_serviceData.GetRecentlyPlayed((objects) =>
+				{
+					if (delivered)
+					{
+						return;
+					}
+					delivered = true;
+					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), libraryParams));
+				});
+				return;
+			}
+			if (parentId == s_recentlyAddedId)
+			{
+				bool delivered = false;
+				m_serviceData.GetRecentlyAdded((objects) =>
+				{
+					if (delivered)
+					{
+						return;
+					}
+					delivered = true;
+					completer.Set(LibraryResult.OfItemList(BuildMixedItems(objects), libraryParams));
+				});
+				return;
+			}
+			if (parentId == s_topPlaylistsId)
+			{
+				bool delivered = false;
+				m_serviceData.GetTopPlaylists((playlists) =>
+				{
+					if (delivered)
+					{
+						return;
+					}
+					delivered = true;
+					List<MediaItem> items = new List<MediaItem>();
+					if (playlists != null)
+					{
+						for (int idx = 0; idx < playlists.Count; idx++)
+						{
+							PulsePlaylist playlist = playlists[idx];
+							items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name, playlist.CoverArt));
+						}
+					}
+					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+				});
+				return;
+			}
+			if (parentId == s_popularArtistsId)
+			{
+				bool delivered = false;
+				m_serviceData.GetPopularArtists((artists) =>
+				{
+					if (delivered)
+					{
+						return;
+					}
+					delivered = true;
+					List<MediaItem> items = new List<MediaItem>();
+					if (artists != null)
+					{
+						for (int idx = 0; idx < artists.Count; idx++)
+						{
+							PulseArtist artist = artists[idx];
+							items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name, artist.CoverArt));
+						}
+					}
+					completer.Set(LibraryResult.OfItemList(items, libraryParams));
+				});
+				return;
+			}
 			if (parentId == s_albumsId)
 			{
 				m_serviceData.GetAlbums((albums) =>
@@ -322,6 +420,47 @@ namespace Thump.Playback
 			{
 				PulseTrack track = tracks[idx];
 				items.Add(BuildPlayableItem("track/" + track.Id, track.Title, track.Artist, track.ImageID));
+			}
+			return items;
+		}
+
+		private static List<MediaItem> BuildMixedItems(List<PulseObject> objects)
+		{
+			List<MediaItem> items = new List<MediaItem>();
+			if (objects == null)
+			{
+				return items;
+			}
+			for (int idx = 0; idx < objects.Count; idx++)
+			{
+				PulseObject pulseObject = objects[idx];
+				switch (pulseObject.Kind)
+				{
+					case eDataType.Album:
+					{
+						PulseAlbum album = (PulseAlbum)pulseObject;
+						items.Add(BuildBrowsableItem("album/" + album.Id, album.Name, album.CoverArt));
+						break;
+					}
+					case eDataType.Artist:
+					{
+						PulseArtist artist = (PulseArtist)pulseObject;
+						items.Add(BuildBrowsableItem("artist/" + artist.Id, artist.Name, artist.CoverArt));
+						break;
+					}
+					case eDataType.Playlist:
+					{
+						PulsePlaylist playlist = (PulsePlaylist)pulseObject;
+						items.Add(BuildBrowsableItem("playlist/" + playlist.Id, playlist.Name, playlist.CoverArt));
+						break;
+					}
+					case eDataType.Track:
+					{
+						PulseTrack track = (PulseTrack)pulseObject;
+						items.Add(BuildPlayableItem("track/" + track.Id, track.Title, track.Artist, track.ImageID));
+						break;
+					}
+				}
 			}
 			return items;
 		}
