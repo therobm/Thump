@@ -385,7 +385,7 @@ namespace Thump.Playback
 					{
 						songs = album.Songs;
 					}
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), styleParams));
+					completer.Set(LibraryResult.OfItemList(BuildCollectionItems("albumplay/" + value, "albumshuffle/" + value, songs), styleParams));
 				});
 				return;
 			}
@@ -402,7 +402,7 @@ namespace Thump.Playback
 					{
 						songs = playlist.Songs;
 					}
-					completer.Set(LibraryResult.OfItemList(BuildTrackItems(songs), styleParams));
+					completer.Set(LibraryResult.OfItemList(BuildCollectionItems("playlistplay/" + value, "playlistshuffle/" + value, songs), styleParams));
 				});
 				return;
 			}
@@ -512,6 +512,170 @@ namespace Thump.Playback
 			});
 		}
 
+		private bool TryExpandSetCollection(IList<MediaItem> items, CallbackToFutureAdapter.Completer completer)
+		{
+			if (items == null)
+			{
+				return false;
+			}
+			if (items.Count != 1)
+			{
+				return false;
+			}
+			CollectionRequest request = ParseCollectionRequest(items[0].MediaId);
+			if (!request.IsCollection)
+			{
+				return false;
+			}
+			FetchCollectionTracks(request, (songs) =>
+			{
+				List<MediaItem> trackItems = BuildTrackItems(songs);
+				List<MediaItem> resolved = new List<MediaItem>();
+				ResolveSetItems(trackItems, 0, resolved, 0, 0, completer);
+			});
+			return true;
+		}
+
+		private bool TryExpandAddCollection(IList<MediaItem> items, CallbackToFutureAdapter.Completer completer)
+		{
+			if (items == null)
+			{
+				return false;
+			}
+			if (items.Count != 1)
+			{
+				return false;
+			}
+			CollectionRequest request = ParseCollectionRequest(items[0].MediaId);
+			if (!request.IsCollection)
+			{
+				return false;
+			}
+			FetchCollectionTracks(request, (songs) =>
+			{
+				List<MediaItem> trackItems = BuildTrackItems(songs);
+				Java.Util.ArrayList resolved = new Java.Util.ArrayList();
+				ResolveItems(trackItems, 0, resolved, completer);
+			});
+			return true;
+		}
+
+		private void FetchCollectionTracks(CollectionRequest request, System.Action<List<PulseTrack>> onTracks)
+		{
+			if (request.IsPlaylist)
+			{
+				m_serviceData.GetPlaylist(request.Id, (playlist) =>
+				{
+					List<PulseTrack> songs;
+					if (playlist == null)
+					{
+						songs = new List<PulseTrack>();
+					}
+					else
+					{
+						songs = playlist.Songs;
+					}
+					DeliverCollectionTracks(request, songs, onTracks);
+				});
+				return;
+			}
+			m_serviceData.GetAlbum(request.Id, (album) =>
+			{
+				List<PulseTrack> songs;
+				if (album == null)
+				{
+					songs = new List<PulseTrack>();
+				}
+				else
+				{
+					songs = album.Songs;
+				}
+				DeliverCollectionTracks(request, songs, onTracks);
+			});
+		}
+
+		private static void DeliverCollectionTracks(CollectionRequest request, List<PulseTrack> songs, System.Action<List<PulseTrack>> onTracks)
+		{
+			List<PulseTrack> ordered;
+			if (songs == null)
+			{
+				ordered = new List<PulseTrack>();
+			}
+			else
+			{
+				ordered = songs;
+			}
+			if (request.IsShuffle)
+			{
+				List<PulseTrack> shuffled = new List<PulseTrack>();
+				for (int idx = 0; idx < ordered.Count; idx++)
+				{
+					shuffled.Add(ordered[idx]);
+				}
+				ShuffleTracks(shuffled);
+				ordered = shuffled;
+			}
+			onTracks(ordered);
+		}
+
+		private static void ShuffleTracks(List<PulseTrack> tracks)
+		{
+			System.Random random = new System.Random();
+			for (int idx = tracks.Count - 1; idx > 0; idx--)
+			{
+				int swap = random.Next(idx + 1);
+				PulseTrack temporary = tracks[idx];
+				tracks[idx] = tracks[swap];
+				tracks[swap] = temporary;
+			}
+		}
+
+		private static CollectionRequest ParseCollectionRequest(string mediaId)
+		{
+			CollectionRequest request = new CollectionRequest();
+			request.IsCollection = false;
+			request.IsPlaylist = false;
+			request.IsShuffle = false;
+			request.Id = "";
+			if (string.IsNullOrEmpty(mediaId))
+			{
+				return request;
+			}
+			if (mediaId.StartsWith("albumplay/"))
+			{
+				request.IsCollection = true;
+				request.IsPlaylist = false;
+				request.IsShuffle = false;
+				request.Id = mediaId.Substring("albumplay/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("albumshuffle/"))
+			{
+				request.IsCollection = true;
+				request.IsPlaylist = false;
+				request.IsShuffle = true;
+				request.Id = mediaId.Substring("albumshuffle/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("playlistplay/"))
+			{
+				request.IsCollection = true;
+				request.IsPlaylist = true;
+				request.IsShuffle = false;
+				request.Id = mediaId.Substring("playlistplay/".Length);
+				return request;
+			}
+			if (mediaId.StartsWith("playlistshuffle/"))
+			{
+				request.IsCollection = true;
+				request.IsPlaylist = true;
+				request.IsShuffle = true;
+				request.Id = mediaId.Substring("playlistshuffle/".Length);
+				return request;
+			}
+			return request;
+		}
+
 		private static IListenableFuture ImmediateFuture(Java.Lang.Object value)
 		{
 			ImmediateResolver resolver = new ImmediateResolver(value);
@@ -539,6 +703,19 @@ namespace Thump.Playback
 			{
 				PulseTrack track = tracks[idx];
 				items.Add(BuildPlayableItem("track/" + track.Id, track.Title, track.Artist, track.ImageID));
+			}
+			return items;
+		}
+
+		private static List<MediaItem> BuildCollectionItems(string playMediaId, string shuffleMediaId, List<PulseTrack> tracks)
+		{
+			List<MediaItem> items = new List<MediaItem>();
+			items.Add(BuildPlayableItem(playMediaId, "Play all", ""));
+			items.Add(BuildPlayableItem(shuffleMediaId, "Shuffle", ""));
+			List<MediaItem> trackItems = BuildTrackItems(tracks);
+			for (int idx = 0; idx < trackItems.Count; idx++)
+			{
+				items.Add(trackItems[idx]);
 			}
 			return items;
 		}
@@ -809,6 +986,14 @@ namespace Thump.Playback
 			return mediaId.Substring("track/".Length);
 		}
 
+		private class CollectionRequest
+		{
+			public bool IsCollection;
+			public bool IsPlaylist;
+			public bool IsShuffle;
+			public string Id;
+		}
+
 		private class ImmediateResolver : Java.Lang.Object, CallbackToFutureAdapter.IResolver
 		{
 			private Java.Lang.Object m_value;
@@ -858,6 +1043,11 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
+				bool handled = m_owner.TryExpandAddCollection(m_items, completer);
+				if (handled)
+				{
+					return null;
+				}
 				Java.Util.ArrayList resolved = new Java.Util.ArrayList();
 				m_owner.ResolveItems(m_items, 0, resolved, completer);
 				return null;
@@ -881,6 +1071,11 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
+				bool handled = m_owner.TryExpandSetCollection(m_items, completer);
+				if (handled)
+				{
+					return null;
+				}
 				List<MediaItem> resolved = new List<MediaItem>();
 				m_owner.ResolveSetItems(m_items, 0, resolved, m_startIndex, m_startPositionMs, completer);
 				return null;
