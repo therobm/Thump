@@ -56,6 +56,7 @@ namespace Thump.Views
 			m_homeButton.TextColor = s_activeColor;
 			m_homeButton.BackgroundColor = Colors.Transparent;
 			m_homeButton.FontSize = 13;
+			m_homeButton.FontFamily = "PoppinsSemiBold";
 			m_homeButton.Clicked += OnHomeClicked;
 
 			Grid.SetColumn(m_homeButton, 0);
@@ -69,6 +70,7 @@ namespace Thump.Views
 			m_libraryButton.TextColor = s_inactiveColor;
 			m_libraryButton.BackgroundColor = Colors.Transparent;
 			m_libraryButton.FontSize = 13;
+			m_libraryButton.FontFamily = "PoppinsSemiBold";
 			m_libraryButton.Clicked += OnLibraryClicked;
 
 			Grid.SetColumn(m_libraryButton, 1);
@@ -82,6 +84,7 @@ namespace Thump.Views
 			m_searchButton.TextColor = s_inactiveColor;
 			m_searchButton.BackgroundColor = Colors.Transparent;
 			m_searchButton.FontSize = 13;
+			m_searchButton.FontFamily = "PoppinsSemiBold";
 			m_searchButton.Clicked += OnSearchClicked;
 
 			Grid.SetColumn(m_searchButton, 2);
@@ -95,6 +98,7 @@ namespace Thump.Views
 			m_settingsButton.TextColor = s_inactiveColor;
 			m_settingsButton.BackgroundColor = Colors.Transparent;
 			m_settingsButton.FontSize = 13;
+			m_settingsButton.FontFamily = "PoppinsSemiBold";
 			m_settingsButton.Clicked += OnSettingsClicked;
 
 			Grid.SetColumn(m_settingsButton, 3);

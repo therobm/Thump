@@ -7,25 +7,23 @@ using Thump.Views;
 
 namespace Thump.Views.Tiles
 {
-	public class HomeCarouselTile : ThumpView
+	public class LibraryGridTile : ThumpView
 	{
 		private ArtImage m_art;
 		private Label m_titleLabel;
 		private Label m_subtitleLabel;
 		private ThumpDataOb m_item;
 
-		public HomeCarouselTile() : base(MainView.Self)
+		public LibraryGridTile() : base(MainView.Self)
 		{
-			
+
 		}
 
 		protected override void BuildLayout()
 		{
-			WidthRequest = 168;
-
 			StackLayout stack = new StackLayout();
 			stack.Spacing = 6;
-			stack.Padding = new Thickness(6, 0);
+			stack.Padding = new Thickness(8, 10);
 
 			stack.Children.Add(BuildArt());
 			stack.Children.Add(BuildLabels());
@@ -40,8 +38,9 @@ namespace Thump.Views.Tiles
 		private View BuildArt()
 		{
 			m_art = new ArtImage();
-			m_art.WidthRequest = 154;
-			m_art.HeightRequest = 154;
+			m_art.WidthRequest = 104;
+			m_art.HeightRequest = 104;
+			m_art.HorizontalOptions = LayoutOptions.Center;
 
 			return m_art;
 		}
@@ -49,12 +48,13 @@ namespace Thump.Views.Tiles
 		private View BuildLabels()
 		{
 			StackLayout labelStack = new StackLayout();
-			labelStack.Spacing = 6;
+			labelStack.Spacing = 2;
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Title";
 			m_titleLabel.TextColor = ThumpColors.OnBackground;
 			m_titleLabel.FontSize = 13;
+			m_titleLabel.HorizontalTextAlignment = TextAlignment.Center;
 			m_titleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			m_titleLabel.MaxLines = 1;
 			labelStack.Children.Add(m_titleLabel);
@@ -63,6 +63,7 @@ namespace Thump.Views.Tiles
 			m_subtitleLabel.Text = "Subtitle";
 			m_subtitleLabel.TextColor = ThumpColors.TextSecondary;
 			m_subtitleLabel.FontSize = 11;
+			m_subtitleLabel.HorizontalTextAlignment = TextAlignment.Center;
 			m_subtitleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			m_subtitleLabel.MaxLines = 1;
 			labelStack.Children.Add(m_subtitleLabel);
@@ -85,18 +86,7 @@ namespace Thump.Views.Tiles
 			}
 			m_item = item;
 
-			if (item.Kind == eDataType.Track)
-			{
-				PulseTrack song = item as PulseTrack;
-				if (song != null)
-				{
-					m_art.SetShape(eArtShape.RoundedRect);
-					m_titleLabel.Text = song.Title;
-					m_subtitleLabel.Text = song.Artist;
-					m_art.SetCoverArt(song.ImageID);
-				}
-			}
-			else if (item.Kind == eDataType.Album)
+			if (item.Kind == eDataType.Album)
 			{
 				PulseAlbum album = item as PulseAlbum;
 				if (album != null)
@@ -129,12 +119,31 @@ namespace Thump.Views.Tiles
 					m_art.SetCoverArt(artist.CoverArt);
 				}
 			}
+			else if (item.Kind == eDataType.Genre)
+			{
+				PulseGenre genre = item as PulseGenre;
+				if (genre != null)
+				{
+					m_art.SetShape(eArtShape.RoundedRect);
+					m_titleLabel.Text = genre.Name;
+					m_subtitleLabel.Text = genre.SongCount + " songs";
+				}
+			}
 		}
 
 		private void OnTapped(object sender, EventArgs e)
 		{
 			if (m_item == null)
 			{
+				return;
+			}
+			if (m_item.Kind == eDataType.Genre)
+			{
+				PulseGenre genre = m_item as PulseGenre;
+				if (genre != null)
+				{
+					m_mainView.OnGenreSelected(genre);
+				}
 				return;
 			}
 			m_mainView.OnHomeItemSelected(m_item);

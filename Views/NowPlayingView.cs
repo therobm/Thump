@@ -10,6 +10,7 @@ namespace Thump.Views
 	{
 		private ArtImage m_art;
 		private Label m_titleLabel;
+		private Label m_albumLabel;
 		private Label m_artistLabel;
 		private Label m_currentTimeLabel;
 		private Slider m_seekSlider;
@@ -18,7 +19,7 @@ namespace Thump.Views
 
 		public NowPlayingView(MainView mainView) : base(mainView)
 		{
-			
+
 		}
 
 		protected override void BuildLayout()
@@ -31,27 +32,15 @@ namespace Thump.Views
 			headerRow.Height = GridLength.Auto;
 			RowDefinition artRow = new RowDefinition();
 			artRow.Height = GridLength.Star;
-			RowDefinition titleRow = new RowDefinition();
-			titleRow.Height = GridLength.Auto;
-			RowDefinition seekRow = new RowDefinition();
-			seekRow.Height = GridLength.Auto;
-			RowDefinition controlsRow = new RowDefinition();
-			controlsRow.Height = GridLength.Auto;
-			RowDefinition actionsRow = new RowDefinition();
-			actionsRow.Height = GridLength.Auto;
+			RowDefinition bottomRow = new RowDefinition();
+			bottomRow.Height = GridLength.Auto;
 			grid.RowDefinitions.Add(headerRow);
 			grid.RowDefinitions.Add(artRow);
-			grid.RowDefinitions.Add(titleRow);
-			grid.RowDefinitions.Add(seekRow);
-			grid.RowDefinitions.Add(controlsRow);
-			grid.RowDefinitions.Add(actionsRow);
+			grid.RowDefinitions.Add(bottomRow);
 
 			grid.Children.Add(BuildHeader());
 			grid.Children.Add(BuildArt());
-			grid.Children.Add(BuildTitle());
-			grid.Children.Add(BuildSeekBar());
-			grid.Children.Add(BuildTransport());
-			grid.Children.Add(BuildActions());
+			grid.Children.Add(BuildBottomBlock());
 
 			Content = grid;
 		}
@@ -63,11 +52,11 @@ namespace Thump.Views
 
 			Button backButton = new Button();
 			backButton.Text = "‹";
-			backButton.FontSize = 22;
+			backButton.FontSize = 24;
 			backButton.TextColor = ThumpColors.OnBackground;
 			backButton.BackgroundColor = Colors.Transparent;
-			backButton.WidthRequest = 44;
-			backButton.HeightRequest = 44;
+			backButton.WidthRequest = 48;
+			backButton.HeightRequest = 48;
 			backButton.Clicked += OnBackClicked;
 			headerStack.Children.Add(backButton);
 
@@ -78,45 +67,71 @@ namespace Thump.Views
 		private View BuildArt()
 		{
 			m_art = new ArtImage();
-			m_art.WidthRequest = 280;
-			m_art.HeightRequest = 280;
-			m_art.HorizontalOptions = LayoutOptions.Center;
-			m_art.VerticalOptions = LayoutOptions.Center;
+			m_art.SetAspect(Aspect.AspectFit);
+			m_art.Margin = new Thickness(24, 16, 24, 8);
+			m_art.HorizontalOptions = LayoutOptions.Fill;
+			m_art.VerticalOptions = LayoutOptions.Fill;
 
 			Grid.SetRow(m_art, 1);
 			return m_art;
 		}
 
+		private View BuildBottomBlock()
+		{
+			VerticalStackLayout bottomStack = new VerticalStackLayout();
+			bottomStack.Spacing = 4;
+
+			bottomStack.Children.Add(BuildTitle());
+			bottomStack.Children.Add(BuildSeekBar());
+			bottomStack.Children.Add(BuildTransport());
+			bottomStack.Children.Add(BuildActions());
+
+			Grid.SetRow(bottomStack, 2);
+			return bottomStack;
+		}
+
 		private View BuildTitle()
 		{
-			StackLayout titleStack = new StackLayout();
-			titleStack.Spacing = 4;
-			titleStack.Padding = new Thickness(24, 16, 24, 8);
+			VerticalStackLayout titleStack = new VerticalStackLayout();
+			titleStack.Spacing = 2;
+			titleStack.Padding = new Thickness(24, 8, 24, 4);
+			titleStack.HorizontalOptions = LayoutOptions.Start;
 
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Track title";
-			m_titleLabel.FontSize = 20;
+			m_titleLabel.FontSize = 24;
+			m_titleLabel.FontAttributes = FontAttributes.Bold;
 			m_titleLabel.TextColor = ThumpColors.OnBackground;
-			m_titleLabel.HorizontalOptions = LayoutOptions.Center;
+			m_titleLabel.HorizontalOptions = LayoutOptions.Start;
+			m_titleLabel.HorizontalTextAlignment = TextAlignment.Start;
 			m_titleLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			titleStack.Children.Add(m_titleLabel);
+
+			m_albumLabel = new Label();
+			m_albumLabel.Text = "Album";
+			m_albumLabel.FontSize = 15;
+			m_albumLabel.TextColor = ThumpColors.TextSecondary;
+			m_albumLabel.HorizontalOptions = LayoutOptions.Start;
+			m_albumLabel.HorizontalTextAlignment = TextAlignment.Start;
+			m_albumLabel.LineBreakMode = LineBreakMode.TailTruncation;
+			titleStack.Children.Add(m_albumLabel);
 
 			m_artistLabel = new Label();
 			m_artistLabel.Text = "Artist";
 			m_artistLabel.FontSize = 14;
-			m_artistLabel.TextColor = ThumpColors.TextSecondary;
-			m_artistLabel.HorizontalOptions = LayoutOptions.Center;
+			m_artistLabel.TextColor = ThumpColors.TextDim;
+			m_artistLabel.HorizontalOptions = LayoutOptions.Start;
+			m_artistLabel.HorizontalTextAlignment = TextAlignment.Start;
 			m_artistLabel.LineBreakMode = LineBreakMode.TailTruncation;
 			titleStack.Children.Add(m_artistLabel);
 
-			Grid.SetRow(titleStack, 2);
 			return titleStack;
 		}
 
 		private View BuildSeekBar()
 		{
 			Grid seekGrid = new Grid();
-			seekGrid.Padding = new Thickness(24, 8, 24, 4);
+			seekGrid.Padding = new Thickness(24, 4, 24, 4);
 
 			ColumnDefinition currentTimeColumn = new ColumnDefinition();
 			currentTimeColumn.Width = GridLength.Auto;
@@ -154,69 +169,72 @@ namespace Thump.Views
 			Grid.SetColumn(m_totalTimeLabel, 2);
 			seekGrid.Children.Add(m_totalTimeLabel);
 
-			Grid.SetRow(seekGrid, 3);
 			return seekGrid;
 		}
 
 		private View BuildTransport()
 		{
 			HorizontalStackLayout controlsStack = new HorizontalStackLayout();
-			controlsStack.Spacing = 16;
+			controlsStack.Spacing = 18;
 			controlsStack.HorizontalOptions = LayoutOptions.Center;
 			controlsStack.Padding = new Thickness(0, 8, 0, 8);
 
 			Button shuffleButton = new Button();
 			shuffleButton.Text = "⇋";
-			shuffleButton.FontSize = 20;
+			shuffleButton.FontSize = 26;
 			shuffleButton.TextColor = ThumpColors.TextSecondary;
 			shuffleButton.BackgroundColor = Colors.Transparent;
-			shuffleButton.WidthRequest = 48;
-			shuffleButton.HeightRequest = 48;
+			shuffleButton.WidthRequest = 56;
+			shuffleButton.HeightRequest = 56;
+			shuffleButton.VerticalOptions = LayoutOptions.Center;
 			shuffleButton.Clicked += OnShuffleClicked;
 			controlsStack.Children.Add(shuffleButton);
 
 			Button prevButton = new Button();
 			prevButton.Text = "⏮";
-			prevButton.FontSize = 22;
+			prevButton.FontSize = 30;
 			prevButton.TextColor = ThumpColors.OnBackground;
 			prevButton.BackgroundColor = Colors.Transparent;
-			prevButton.WidthRequest = 56;
-			prevButton.HeightRequest = 56;
+			prevButton.WidthRequest = 60;
+			prevButton.HeightRequest = 60;
+			prevButton.VerticalOptions = LayoutOptions.Center;
 			prevButton.Clicked += OnPrevClicked;
 			controlsStack.Children.Add(prevButton);
 
 			m_playPauseButton = new Button();
 			m_playPauseButton.Text = "▶";
-			m_playPauseButton.FontSize = 26;
+			m_playPauseButton.FontSize = 32;
 			m_playPauseButton.TextColor = ThumpColors.Background;
 			m_playPauseButton.BackgroundColor = ThumpColors.Accent;
-			m_playPauseButton.CornerRadius = 32;
-			m_playPauseButton.WidthRequest = 64;
-			m_playPauseButton.HeightRequest = 64;
+			m_playPauseButton.CornerRadius = 38;
+			m_playPauseButton.WidthRequest = 76;
+			m_playPauseButton.HeightRequest = 76;
+			m_playPauseButton.VerticalOptions = LayoutOptions.Center;
 			m_playPauseButton.Clicked += OnPlayPauseClicked;
 			controlsStack.Children.Add(m_playPauseButton);
 
 			Button nextButton = new Button();
 			nextButton.Text = "⏭";
-			nextButton.FontSize = 22;
+			nextButton.FontSize = 30;
 			nextButton.TextColor = ThumpColors.OnBackground;
 			nextButton.BackgroundColor = Colors.Transparent;
-			nextButton.WidthRequest = 56;
-			nextButton.HeightRequest = 56;
+			nextButton.WidthRequest = 60;
+			nextButton.HeightRequest = 60;
+			nextButton.VerticalOptions = LayoutOptions.Center;
 			nextButton.Clicked += OnNextClicked;
 			controlsStack.Children.Add(nextButton);
 
 			Button repeatButton = new Button();
 			repeatButton.Text = "↻";
-			repeatButton.FontSize = 20;
+			repeatButton.FontSize = 26;
 			repeatButton.TextColor = ThumpColors.TextSecondary;
 			repeatButton.BackgroundColor = Colors.Transparent;
-			repeatButton.WidthRequest = 48;
-			repeatButton.HeightRequest = 48;
+			repeatButton.WidthRequest = 56;
+			repeatButton.HeightRequest = 56;
+			repeatButton.VerticalOptions = LayoutOptions.Center;
 			repeatButton.Clicked += OnRepeatClicked;
 			controlsStack.Children.Add(repeatButton);
 
-			Grid.SetRow(controlsStack, 4);
 			return controlsStack;
 		}
 
@@ -231,7 +249,9 @@ namespace Thump.Views
 			favoriteButton.Text = "♡  Favorite";
 			favoriteButton.TextColor = ThumpColors.TextSecondary;
 			favoriteButton.BackgroundColor = Colors.Transparent;
-			favoriteButton.FontSize = 13;
+			favoriteButton.FontSize = 16;
+			favoriteButton.HeightRequest = 48;
+			favoriteButton.Padding = new Thickness(16, 8);
 			favoriteButton.Clicked += OnFavoriteClicked;
 			actionsStack.Children.Add(favoriteButton);
 
@@ -239,11 +259,12 @@ namespace Thump.Views
 			queueButton.Text = "≣  Queue";
 			queueButton.TextColor = ThumpColors.TextSecondary;
 			queueButton.BackgroundColor = Colors.Transparent;
-			queueButton.FontSize = 13;
+			queueButton.FontSize = 16;
+			queueButton.HeightRequest = 48;
+			queueButton.Padding = new Thickness(16, 8);
 			queueButton.Clicked += OnQueueClicked;
 			actionsStack.Children.Add(queueButton);
 
-			Grid.SetRow(actionsStack, 5);
 			return actionsStack;
 		}
 
@@ -259,6 +280,7 @@ namespace Thump.Views
 			if (song == null)
 			{
 				m_titleLabel.Text = "Nothing playing";
+				m_albumLabel.Text = "";
 				m_artistLabel.Text = "";
 				m_currentTimeLabel.Text = "0:00";
 				m_totalTimeLabel.Text = "0:00";
@@ -266,6 +288,7 @@ namespace Thump.Views
 				return;
 			}
 			m_titleLabel.Text = song.Title;
+			m_albumLabel.Text = song.Album;
 			m_artistLabel.Text = song.Artist;
 			m_currentTimeLabel.Text = "0:00";
 			m_totalTimeLabel.Text = FormatDuration(song.Duration);

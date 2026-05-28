@@ -39,7 +39,7 @@ namespace Thump.Views.Tiles
 
 			Content = grid;
 
-			m_art.MakeCircular();
+			m_art.SetShape(eArtShape.Circle);
 		}
 
 		private View BuildArt()

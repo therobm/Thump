@@ -20,8 +20,8 @@ namespace Thump.Views
 		public ArtistDetailView(MainView mainView, PulseArtist artist) : base(mainView)
 		{
 			m_artist = artist;
-			
-			m_art.MakeCircular();
+
+			m_art.SetShape(eArtShape.Circle);
 		}
 
 		protected override void BuildLayout()

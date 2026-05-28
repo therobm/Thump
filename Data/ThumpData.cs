@@ -378,6 +378,15 @@ namespace Thump.Data
 			}
 		}
 
+		public void GetTopItems(Action<List<PulseObject>> callback)
+		{
+			if (callback == null)
+			{
+				return;
+			}
+			m_pulseClient.GetTopItems(callback);
+		}
+
 		public void GetFavories(Action<List<PulseObject>> callback)
 		{
 			if (callback == null)

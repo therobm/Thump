@@ -4,19 +4,28 @@ using Microsoft.Maui.Controls.Shapes;
 
 namespace Thump.Views
 {
+	public enum eArtShape
+	{
+		RoundedRect,
+		Circle,
+	}
+
 	public class ArtImage : ThumpView
 	{
+		private const double s_cornerRadius = 10;
+
 		private Border m_border;
 		private Image m_image;
+		private eArtShape m_shape = eArtShape.RoundedRect;
 
 		public ArtImage() : base(MainView.Self)
 		{
-			
+
 		}
 
 		public ArtImage(MainView mainView) : base(mainView)
 		{
-			
+
 		}
 
 		protected override void BuildLayout()
@@ -28,12 +37,11 @@ namespace Thump.Views
 			m_border = new Border();
 			m_border.StrokeThickness = 0;
 			m_border.BackgroundColor = ThumpColors.PlaceholderArt;
-			RoundRectangle shape = new RoundRectangle();
-			shape.CornerRadius = new CornerRadius(6);
-			m_border.StrokeShape = shape;
 			m_border.Content = m_image;
 
 			Content = m_border;
+
+			ApplyShape();
 		}
 
 		public override void Initialize()
@@ -41,9 +49,29 @@ namespace Thump.Views
 			base.Initialize();
 		}
 
-		public void MakeCircular()
+		public void SetShape(eArtShape shape)
 		{
-			m_border.StrokeShape = new Ellipse();
+			m_shape = shape;
+			ApplyShape();
+		}
+
+		public void SetAspect(Aspect aspect)
+		{
+			m_image.Aspect = aspect;
+		}
+
+		private void ApplyShape()
+		{
+			if (m_shape == eArtShape.Circle)
+			{
+				m_border.StrokeShape = new Ellipse();
+			}
+			else
+			{
+				RoundRectangle rounded = new RoundRectangle();
+				rounded.CornerRadius = new CornerRadius(s_cornerRadius);
+				m_border.StrokeShape = rounded;
+			}
 		}
 
 		public void SetCoverArt(string coverArtId)

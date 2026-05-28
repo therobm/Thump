@@ -1,73 +1,79 @@
 using System;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Controls.Shapes;
 using Thump.Data;
 using Thump.Pulse;
 using Thump.Views;
 
 namespace Thump.Views.Tiles
 {
-	public class HomeCarouselTile : ThumpView
+	public class HomeTopTile : ThumpView
 	{
 		private ArtImage m_art;
 		private Label m_titleLabel;
-		private Label m_subtitleLabel;
 		private ThumpDataOb m_item;
 
-		public HomeCarouselTile() : base(MainView.Self)
+		public HomeTopTile() : base(MainView.Self)
 		{
-			
+
 		}
 
 		protected override void BuildLayout()
 		{
-			WidthRequest = 168;
+			Grid grid = new Grid();
+			grid.Padding = new Thickness(6);
+			grid.ColumnSpacing = 10;
 
-			StackLayout stack = new StackLayout();
-			stack.Spacing = 6;
-			stack.Padding = new Thickness(6, 0);
+			ColumnDefinition artColumn = new ColumnDefinition();
+			artColumn.Width = GridLength.Auto;
+			ColumnDefinition textColumn = new ColumnDefinition();
+			textColumn.Width = GridLength.Star;
+			grid.ColumnDefinitions.Add(artColumn);
+			grid.ColumnDefinitions.Add(textColumn);
 
-			stack.Children.Add(BuildArt());
-			stack.Children.Add(BuildLabels());
+			grid.Children.Add(BuildArt());
+			grid.Children.Add(BuildLabel());
+
+			Border panel = new Border();
+			panel.StrokeThickness = 0;
+			panel.BackgroundColor = ThumpColors.SurfaceElevated;
+			RoundRectangle shape = new RoundRectangle();
+			shape.CornerRadius = new CornerRadius(8);
+			panel.StrokeShape = shape;
+			panel.Content = grid;
 
 			TapGestureRecognizer tap = new TapGestureRecognizer();
 			tap.Tapped += OnTapped;
-			stack.GestureRecognizers.Add(tap);
+			panel.GestureRecognizers.Add(tap);
 
-			Content = stack;
+			Content = panel;
 		}
 
 		private View BuildArt()
 		{
 			m_art = new ArtImage();
-			m_art.WidthRequest = 154;
-			m_art.HeightRequest = 154;
+			m_art.WidthRequest = 48;
+			m_art.HeightRequest = 48;
+			m_art.VerticalOptions = LayoutOptions.Center;
 
+			Grid.SetColumn(m_art, 0);
 			return m_art;
 		}
 
-		private View BuildLabels()
+		private View BuildLabel()
 		{
-			StackLayout labelStack = new StackLayout();
-			labelStack.Spacing = 6;
-
 			m_titleLabel = new Label();
 			m_titleLabel.Text = "Title";
 			m_titleLabel.TextColor = ThumpColors.OnBackground;
 			m_titleLabel.FontSize = 13;
+			m_titleLabel.FontAttributes = FontAttributes.Bold;
 			m_titleLabel.LineBreakMode = LineBreakMode.TailTruncation;
-			m_titleLabel.MaxLines = 1;
-			labelStack.Children.Add(m_titleLabel);
+			m_titleLabel.MaxLines = 2;
+			m_titleLabel.VerticalOptions = LayoutOptions.Center;
 
-			m_subtitleLabel = new Label();
-			m_subtitleLabel.Text = "Subtitle";
-			m_subtitleLabel.TextColor = ThumpColors.TextSecondary;
-			m_subtitleLabel.FontSize = 11;
-			m_subtitleLabel.LineBreakMode = LineBreakMode.TailTruncation;
-			m_subtitleLabel.MaxLines = 1;
-			labelStack.Children.Add(m_subtitleLabel);
-
-			return labelStack;
+			Grid.SetColumn(m_titleLabel, 1);
+			return m_titleLabel;
 		}
 
 		public override void Initialize()
@@ -92,7 +98,6 @@ namespace Thump.Views.Tiles
 				{
 					m_art.SetShape(eArtShape.RoundedRect);
 					m_titleLabel.Text = song.Title;
-					m_subtitleLabel.Text = song.Artist;
 					m_art.SetCoverArt(song.ImageID);
 				}
 			}
@@ -103,7 +108,6 @@ namespace Thump.Views.Tiles
 				{
 					m_art.SetShape(eArtShape.RoundedRect);
 					m_titleLabel.Text = album.Name;
-					m_subtitleLabel.Text = album.Artist;
 					m_art.SetCoverArt(album.CoverArt);
 				}
 			}
@@ -114,7 +118,6 @@ namespace Thump.Views.Tiles
 				{
 					m_art.SetShape(eArtShape.RoundedRect);
 					m_titleLabel.Text = playlist.Name;
-					m_subtitleLabel.Text = playlist.SongCount + " tracks";
 					m_art.SetCoverArt(playlist.CoverArt);
 				}
 			}
@@ -125,7 +128,6 @@ namespace Thump.Views.Tiles
 				{
 					m_art.SetShape(eArtShape.Circle);
 					m_titleLabel.Text = artist.Name;
-					m_subtitleLabel.Text = artist.AlbumCount + " albums";
 					m_art.SetCoverArt(artist.CoverArt);
 				}
 			}
