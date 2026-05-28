@@ -83,7 +83,7 @@ namespace Thump.Data
 
 		public static string GetServerIp()
 		{
-			return Preferences.Get(s_keyServerIp, "https://192.168.5.5");
+			return Preferences.Get(s_keyServerIp, "192.168.5.5");
 		}
 		public static void SetServerIp(string value)
 		{
