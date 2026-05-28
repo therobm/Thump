@@ -225,11 +225,7 @@ namespace Thump.Data
 			string finalPath = Path.Combine(m_blobDirectory, safeName);
 			string tempPath = finalPath + ".tmp";
 			File.WriteAllBytes(tempPath, data);
-			if (File.Exists(finalPath))
-			{
-				File.Delete(finalPath);
-			}
-			File.Move(tempPath, finalPath);
+			File.Move(tempPath, finalPath, true);
 
 			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
