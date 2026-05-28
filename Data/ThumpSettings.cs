@@ -108,14 +108,25 @@ namespace Thump.Data
 			Preferences.Set(s_keyUsername, value);
 		}
 
-		// TODO: move the password to SecureStorage before shipping; Preferences is plaintext.
 		public static string GetPassword()
 		{
-			return Preferences.Get(s_keyPassword, "");
+			string secureValue = SecureStorage.Default.GetAsync(s_keyPassword).GetAwaiter().GetResult();
+			if (!string.IsNullOrEmpty(secureValue))
+			{
+				return secureValue;
+			}
+			string legacyValue = Preferences.Get(s_keyPassword, "");
+			if (!string.IsNullOrEmpty(legacyValue))
+			{
+				SecureStorage.Default.SetAsync(s_keyPassword, legacyValue).GetAwaiter().GetResult();
+				Preferences.Remove(s_keyPassword);
+				return legacyValue;
+			}
+			return "";
 		}
 		public static void SetPassword(string value)
 		{
-			Preferences.Set(s_keyPassword, value);
+			SecureStorage.Default.SetAsync(s_keyPassword, value).GetAwaiter().GetResult();
 		}
 
 		public static PulseClient.eSubSonicAuthType GetAuthType()
