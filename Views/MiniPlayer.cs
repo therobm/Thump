@@ -12,6 +12,8 @@ namespace Thump.Views
 		private Label m_titleLabel;
 		private Label m_artistLabel;
 		private Button m_playPauseButton;
+		private Button m_prevButton;
+		private Button m_nextButton;
 		private ProgressBar m_progress;
 
 		public MiniPlayer(MainView mainView) : base(mainView)
@@ -106,15 +108,15 @@ namespace Thump.Views
 			controlsStack.Spacing = 0;
 			controlsStack.VerticalOptions = LayoutOptions.Center;
 
-			Button prevButton = new Button();
-			prevButton.Text = "⏮";
-			prevButton.TextColor = ThumpColors.OnBackground;
-			prevButton.BackgroundColor = Colors.Transparent;
-			prevButton.FontSize = 18;
-			prevButton.WidthRequest = 44;
-			prevButton.HeightRequest = 48;
-			prevButton.Clicked += OnPrevClicked;
-			controlsStack.Children.Add(prevButton);
+			m_prevButton = new Button();
+			m_prevButton.Text = "⏮";
+			m_prevButton.TextColor = ThumpColors.OnBackground;
+			m_prevButton.BackgroundColor = Colors.Transparent;
+			m_prevButton.FontSize = 18;
+			m_prevButton.WidthRequest = 44;
+			m_prevButton.HeightRequest = 48;
+			m_prevButton.Clicked += OnPrevClicked;
+			controlsStack.Children.Add(m_prevButton);
 
 			m_playPauseButton = new Button();
 			m_playPauseButton.Text = "▶";
@@ -126,15 +128,15 @@ namespace Thump.Views
 			m_playPauseButton.Clicked += OnPlayPauseClicked;
 			controlsStack.Children.Add(m_playPauseButton);
 
-			Button nextButton = new Button();
-			nextButton.Text = "⏭";
-			nextButton.TextColor = ThumpColors.OnBackground;
-			nextButton.BackgroundColor = Colors.Transparent;
-			nextButton.FontSize = 18;
-			nextButton.WidthRequest = 44;
-			nextButton.HeightRequest = 48;
-			nextButton.Clicked += OnNextClicked;
-			controlsStack.Children.Add(nextButton);
+			m_nextButton = new Button();
+			m_nextButton.Text = "⏭";
+			m_nextButton.TextColor = ThumpColors.OnBackground;
+			m_nextButton.BackgroundColor = Colors.Transparent;
+			m_nextButton.FontSize = 18;
+			m_nextButton.WidthRequest = 44;
+			m_nextButton.HeightRequest = 48;
+			m_nextButton.Clicked += OnNextClicked;
+			controlsStack.Children.Add(m_nextButton);
 
 			Grid.SetColumn(controlsStack, 2);
 			return controlsStack;
@@ -151,11 +153,40 @@ namespace Thump.Views
 			{
 				m_titleLabel.Text = "Nothing playing";
 				m_artistLabel.Text = "";
+				UpdateSkipButtons();
 				return;
 			}
 			m_titleLabel.Text = song.Title;
 			m_artistLabel.Text = song.Artist;
 			m_art.SetCoverArt(song.ImageID);
+			UpdateSkipButtons();
+		}
+
+		private void UpdateSkipButtons()
+		{
+			if (m_prevButton == null || m_nextButton == null)
+			{
+				return;
+			}
+			int index = m_mainView.GetQueueIndex();
+			int count = m_mainView.GetQueue().Count;
+			bool canPrevious = index > 0;
+			bool canNext = index < count - 1;
+			SetSkipButtonState(m_prevButton, canPrevious);
+			SetSkipButtonState(m_nextButton, canNext);
+		}
+
+		private void SetSkipButtonState(Button button, bool enabled)
+		{
+			button.IsEnabled = enabled;
+			if (enabled)
+			{
+				button.TextColor = ThumpColors.OnBackground;
+			}
+			else
+			{
+				button.TextColor = ThumpColors.TextDim;
+			}
 		}
 
 		public void SetPlaying(bool playing)

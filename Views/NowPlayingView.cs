@@ -19,6 +19,8 @@ namespace Thump.Views
 		private Slider m_seekSlider;
 		private Label m_totalTimeLabel;
 		private Button m_playPauseButton;
+		private Button m_prevButton;
+		private Button m_nextButton;
 		private Button m_shuffleButton;
 		private Button m_repeatButton;
 		private CollectionView m_queueList;
@@ -212,16 +214,16 @@ namespace Thump.Views
 			m_shuffleButton.Clicked += OnShuffleClicked;
 			controlsStack.Children.Add(m_shuffleButton);
 
-			Button prevButton = new Button();
-			prevButton.Text = "⏮";
-			prevButton.FontSize = 30;
-			prevButton.TextColor = ThumpColors.OnBackground;
-			prevButton.BackgroundColor = Colors.Transparent;
-			prevButton.WidthRequest = 60;
-			prevButton.HeightRequest = 60;
-			prevButton.VerticalOptions = LayoutOptions.Center;
-			prevButton.Clicked += OnPrevClicked;
-			controlsStack.Children.Add(prevButton);
+			m_prevButton = new Button();
+			m_prevButton.Text = "⏮";
+			m_prevButton.FontSize = 30;
+			m_prevButton.TextColor = ThumpColors.OnBackground;
+			m_prevButton.BackgroundColor = Colors.Transparent;
+			m_prevButton.WidthRequest = 60;
+			m_prevButton.HeightRequest = 60;
+			m_prevButton.VerticalOptions = LayoutOptions.Center;
+			m_prevButton.Clicked += OnPrevClicked;
+			controlsStack.Children.Add(m_prevButton);
 
 			m_playPauseButton = new Button();
 			m_playPauseButton.Text = "\u25B6\uFE0E";
@@ -234,16 +236,16 @@ namespace Thump.Views
 			m_playPauseButton.Clicked += OnPlayPauseClicked;
 			controlsStack.Children.Add(m_playPauseButton);
 
-			Button nextButton = new Button();
-			nextButton.Text = "⏭";
-			nextButton.FontSize = 30;
-			nextButton.TextColor = ThumpColors.OnBackground;
-			nextButton.BackgroundColor = Colors.Transparent;
-			nextButton.WidthRequest = 60;
-			nextButton.HeightRequest = 60;
-			nextButton.VerticalOptions = LayoutOptions.Center;
-			nextButton.Clicked += OnNextClicked;
-			controlsStack.Children.Add(nextButton);
+			m_nextButton = new Button();
+			m_nextButton.Text = "⏭";
+			m_nextButton.FontSize = 30;
+			m_nextButton.TextColor = ThumpColors.OnBackground;
+			m_nextButton.BackgroundColor = Colors.Transparent;
+			m_nextButton.WidthRequest = 60;
+			m_nextButton.HeightRequest = 60;
+			m_nextButton.VerticalOptions = LayoutOptions.Center;
+			m_nextButton.Clicked += OnNextClicked;
+			controlsStack.Children.Add(m_nextButton);
 
 			m_repeatButton = new Button();
 			m_repeatButton.Text = "↻";
@@ -308,6 +310,7 @@ namespace Thump.Views
 				m_currentTimeLabel.Text = "0:00";
 				m_totalTimeLabel.Text = "0:00";
 				m_seekSlider.Value = 0;
+				UpdateSkipButtons();
 				return;
 			}
 			m_titleLabel.Text = song.Title;
@@ -318,6 +321,34 @@ namespace Thump.Views
 			m_seekSlider.Value = 0;
 			m_art.SetCoverArt(song.ImageID);
 			RefreshQueue();
+			UpdateSkipButtons();
+		}
+
+		private void UpdateSkipButtons()
+		{
+			if (m_prevButton == null || m_nextButton == null)
+			{
+				return;
+			}
+			int index = m_mainView.GetQueueIndex();
+			int count = m_mainView.GetQueue().Count;
+			bool canPrevious = index > 0;
+			bool canNext = index < count - 1;
+			SetSkipButtonState(m_prevButton, canPrevious);
+			SetSkipButtonState(m_nextButton, canNext);
+		}
+
+		private void SetSkipButtonState(Button button, bool enabled)
+		{
+			button.IsEnabled = enabled;
+			if (enabled)
+			{
+				button.TextColor = ThumpColors.OnBackground;
+			}
+			else
+			{
+				button.TextColor = ThumpColors.TextDim;
+			}
 		}
 
 		public void SetPlaying(bool playing)
