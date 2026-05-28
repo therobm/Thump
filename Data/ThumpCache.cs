@@ -848,7 +848,7 @@ namespace Thump.Data
 				cmd.Parameters.AddWithValue("$aid", NullableParam(song.ArtistId));
 				cmd.Parameters.AddWithValue("$alb", NullableParam(song.Album));
 				cmd.Parameters.AddWithValue("$albid", NullableParam(song.AlbumId));
-				cmd.Parameters.AddWithValue("$ca", DBNull.Value);
+				cmd.Parameters.AddWithValue("$ca", NullableParam(song.ImageID));
 				cmd.Parameters.AddWithValue("$d", song.Duration);
 				cmd.Parameters.AddWithValue("$f", now);
 				cmd.ExecuteNonQuery();
