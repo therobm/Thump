@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.Maui;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
@@ -456,28 +457,32 @@ namespace Thump.Views
 			m_connectStatusLabel.TextColor = ThumpColors.TextSecondary;
 
 			PulseClient pulse = MainView.Data.Pulse;
-			pulse.SetServerParams(ip, port, user, password, m_authType, true);
-	
-			bool success = pulse.TestConnection(out JsonElement response);
-
-			string message = "Unknown";
-			if (!success && response.TryGetProperty("error", out JsonElement error))
-				message = JsonHelper.GetString(error, "message");
-
-			MainThread.BeginInvokeOnMainThread(() =>
+			PulseClient.eSubSonicAuthType authType = m_authType;
+			Task.Run(() =>
 			{
-				if (success)
+				pulse.SetServerParams(ip, port, user, password, authType, true);
+				bool success = pulse.TestConnection(out JsonElement response);
+				string message = "Unknown";
+				if (!success && response.TryGetProperty("error", out JsonElement error))
 				{
-					m_connectStatusLabel.Text = "Connected";
-					m_connectStatusLabel.TextColor = s_successColor;
+					message = JsonHelper.GetString(error, "message");
 				}
-				else
+				bool capturedSuccess = success;
+				string capturedMessage = message;
+				MainThread.BeginInvokeOnMainThread(() =>
 				{
-					m_connectStatusLabel.Text = "Failed: " + message;
-					m_connectStatusLabel.TextColor = s_failColor;
-				}
+					if (capturedSuccess)
+					{
+						m_connectStatusLabel.Text = "Connected";
+						m_connectStatusLabel.TextColor = s_successColor;
+					}
+					else
+					{
+						m_connectStatusLabel.Text = "Failed: " + capturedMessage;
+						m_connectStatusLabel.TextColor = s_failColor;
+					}
+				});
 			});
-			
 		}
 
 		private void RefreshCacheStats()
