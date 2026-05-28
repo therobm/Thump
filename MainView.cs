@@ -538,8 +538,16 @@ namespace Thump
 			{
 				return;
 			}
+			bool started = false;
 			m_data.GetAlbumsForArtist(artist, (albums) =>
 			{
+				// The data route can fire its callback more than once (cache fast-path
+				// then network); start the walk only once.
+				if (started)
+				{
+					return;
+				}
+				started = true;
 				if (albums == null || albums.Count == 0)
 				{
 					return;
@@ -567,8 +575,16 @@ namespace Thump
 				}
 				return;
 			}
+			bool advanced = false;
 			m_data.GetTracksForAlbum(albums[index], (tracks) =>
 			{
+				// Guard against the route's double callback: advancing twice here would
+				// branch the recursion and flood requests / duplicate the queue.
+				if (advanced)
+				{
+					return;
+				}
+				advanced = true;
 				if (tracks != null)
 				{
 					combined.AddRange(tracks);
