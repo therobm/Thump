@@ -289,6 +289,7 @@ namespace Thump.Playback
 			}
 			int generation = m_generation;
 			AppendQueueItem(tracks, 0, generation);
+			m_queue.AddRange(tracks);
 		}
 
 		private void AppendQueueItem(List<PulseTrack> tracks, int index, int generation)
@@ -326,6 +327,7 @@ namespace Thump.Playback
 				insertAt = count;
 			}
 			InsertQueueItem(tracks, 0, insertAt, generation);
+			m_queue.InsertRange(insertAt, tracks);
 		}
 
 		private void InsertQueueItem(List<PulseTrack> tracks, int index, int insertAt, int generation)
