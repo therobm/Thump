@@ -183,6 +183,21 @@ namespace Thump
 			}
 		}
 
+		protected override bool OnBackButtonPressed()
+		{
+			if (m_inDetailView)
+			{
+				OnBackPressed();
+				return true;
+			}
+			if (m_activeTab != eTab.Home)
+			{
+				NavigateToHome();
+				return true;
+			}
+			return base.OnBackButtonPressed();
+		}
+
 		public void OnArtistSelected(PulseArtist artist)
 		{
 			ArtistDetailView detail = new ArtistDetailView(this, artist);
