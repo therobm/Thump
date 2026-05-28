@@ -282,6 +282,43 @@ namespace Thump.Data
 			}
 		}
 
+		public void GetTrackAudioFile(PulseTrack track, Action<string> callback)
+		{
+			if (callback == null)
+			{
+				return;
+			}
+			if (track == null || string.IsNullOrEmpty(track.Id))
+			{
+				callback(null);
+				return;
+			}
+			string blobKey = "track:" + track.Id;
+			m_cache.Enqueue(() =>
+			{
+				string existingPath = m_cache.GetBlobFilePath(blobKey);
+				if (!string.IsNullOrEmpty(existingPath))
+				{
+					MainThread.BeginInvokeOnMainThread(() => { callback(existingPath); });
+					return;
+				}
+				m_pulseClient.GetTrackAudio(track.Id, (data) =>
+				{
+					if (data == null || data.Length == 0)
+					{
+						callback(null);
+						return;
+					}
+					m_cache.Enqueue(() =>
+					{
+						m_cache.WriteBlob(blobKey, data, "audio");
+						string storedPath = m_cache.GetBlobFilePath(blobKey);
+						MainThread.BeginInvokeOnMainThread(() => { callback(storedPath); });
+					});
+				});
+			});
+		}
+
 		public void Search(string query, Action<PulseSearchData> callback)
 		{
 			if (callback == null)

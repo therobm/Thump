@@ -11,10 +11,12 @@ namespace Thump.Views
 		private ArtImage m_art;
 		private Label m_titleLabel;
 		private Label m_artistLabel;
+		private Button m_playPauseButton;
+		private ProgressBar m_progress;
 
 		public MiniPlayer(MainView mainView) : base(mainView)
 		{
-			
+
 		}
 
 		protected override void BuildLayout()
@@ -43,7 +45,26 @@ namespace Thump.Views
 			tap.Tapped += OnExpandTapped;
 			grid.GestureRecognizers.Add(tap);
 
-			Content = grid;
+			Grid outer = new Grid();
+			RowDefinition progressRow = new RowDefinition();
+			progressRow.Height = GridLength.Auto;
+			RowDefinition contentRow = new RowDefinition();
+			contentRow.Height = GridLength.Star;
+			outer.RowDefinitions.Add(progressRow);
+			outer.RowDefinitions.Add(contentRow);
+
+			m_progress = new ProgressBar();
+			m_progress.Progress = 0;
+			m_progress.HeightRequest = 2;
+			m_progress.ProgressColor = ThumpColors.Accent;
+			m_progress.BackgroundColor = ThumpColors.Divider;
+			Grid.SetRow(m_progress, 0);
+			outer.Children.Add(m_progress);
+
+			Grid.SetRow(grid, 1);
+			outer.Children.Add(grid);
+
+			Content = outer;
 		}
 
 		private View BuildArt()
@@ -81,17 +102,17 @@ namespace Thump.Views
 
 		private View BuildPlayButton()
 		{
-			Button playPauseButton = new Button();
-			playPauseButton.Text = "▶";
-			playPauseButton.TextColor = ThumpColors.OnBackground;
-			playPauseButton.BackgroundColor = Colors.Transparent;
-			playPauseButton.FontSize = 20;
-			playPauseButton.WidthRequest = 48;
-			playPauseButton.HeightRequest = 48;
-			playPauseButton.Clicked += OnPlayPauseClicked;
+			m_playPauseButton = new Button();
+			m_playPauseButton.Text = "▶";
+			m_playPauseButton.TextColor = ThumpColors.OnBackground;
+			m_playPauseButton.BackgroundColor = Colors.Transparent;
+			m_playPauseButton.FontSize = 20;
+			m_playPauseButton.WidthRequest = 48;
+			m_playPauseButton.HeightRequest = 48;
+			m_playPauseButton.Clicked += OnPlayPauseClicked;
 
-			Grid.SetColumn(playPauseButton, 2);
-			return playPauseButton;
+			Grid.SetColumn(m_playPauseButton, 2);
+			return m_playPauseButton;
 		}
 
 		public override void Initialize()
@@ -112,8 +133,34 @@ namespace Thump.Views
 			m_art.SetCoverArt(song.ImageID);
 		}
 
+		public void SetPlaying(bool playing)
+		{
+			if (playing)
+			{
+				m_playPauseButton.Text = "⏸";
+			}
+			else
+			{
+				m_playPauseButton.Text = "▶";
+			}
+		}
+
+		public void SetProgress(double fraction)
+		{
+			if (fraction < 0)
+			{
+				fraction = 0;
+			}
+			if (fraction > 1)
+			{
+				fraction = 1;
+			}
+			m_progress.Progress = fraction;
+		}
+
 		private void OnPlayPauseClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnTogglePlayPause();
 		}
 
 		private void OnExpandTapped(object sender, EventArgs e)

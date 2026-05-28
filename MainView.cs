@@ -4,6 +4,7 @@ using Microsoft.Maui;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Storage;
 using Thump.Data;
+using Thump.Playback;
 using Thump.Pulse;
 using Thump.Views;
 
@@ -19,6 +20,9 @@ namespace Thump
 
 	public class MainView : ContentPage
 	{
+		public const string ServerUrl = "https://192.168.5.5:32458";
+		public const string ServerUser = "Rob";
+
 		public static MainView Self { get { return s_self; } }
 		public static ThumpData Data { get { return Self.m_data; } }
 		
@@ -41,6 +45,10 @@ namespace Thump
 		private int m_currentQueueIndex;
 		private PulseTrack m_currentTrack;
 		private ThumpData m_data;
+		private IThumpPlayer m_player;
+		private ePlaybackState m_playbackState = ePlaybackState.Idle;
+		private long m_currentDurationMs;
+		private NowPlayingView m_nowPlayingView;
 
 		public MainView()
 		{
@@ -67,14 +75,22 @@ namespace Thump
 
 			Content = m_rootGrid;
 
+
 			m_pulseClient = new PulseClient();
 			m_pulseClient.SetServerParams("192.168.5.5","32458", "Rob", "asdf", PulseClient.eSubSonicAuthType.Token, true);
+
 
 			string cacheRoot = FileSystem.CacheDirectory;
 			string databasePath = Path.Combine(cacheRoot, "thump.db");
 			string blobDirectory = Path.Combine(cacheRoot, "blobs");
 			m_cache = new ThumpCache(databasePath, blobDirectory);
 			m_data = new ThumpData(m_pulseClient, m_cache);
+
+#if ANDROID
+			m_player = new AndroidThumpPlayer(this, m_data);
+#else
+			m_player = new StubThumpPlayer();
+#endif
 
 			m_homeView = new HomeView(this);
 			m_libraryView = new LibraryView(this);
@@ -251,6 +267,91 @@ namespace Thump
 			m_currentTrack = tracks[startIndex];
 			m_miniPlayer.SetTrack(m_currentTrack);
 			ShowMiniPlayer();
+			m_player.Play(tracks, startIndex);
+		}
+
+		public void OnTogglePlayPause()
+		{
+			if (m_playbackState == ePlaybackState.Playing || m_playbackState == ePlaybackState.Buffering)
+			{
+				m_player.Pause();
+			}
+			else
+			{
+				m_player.Resume();
+			}
+		}
+
+		public void OnNext()
+		{
+			m_player.Next();
+		}
+
+		public void OnPrevious()
+		{
+			m_player.Previous();
+		}
+
+		public void OnSeekToFraction(double fraction)
+		{
+			long position = (long)(fraction * m_currentDurationMs);
+			m_player.SeekTo(position);
+		}
+
+		public void OnPlaybackStateChanged(ePlaybackState state)
+		{
+			m_playbackState = state;
+			bool playing = state == ePlaybackState.Playing;
+			m_miniPlayer.SetPlaying(playing);
+			if (m_nowPlayingView != null)
+			{
+				m_nowPlayingView.SetPlaying(playing);
+			}
+		}
+
+		public void OnPlaybackPositionChanged(long positionMilliseconds, long durationMilliseconds)
+		{
+			m_currentDurationMs = durationMilliseconds;
+			double fraction = 0;
+			if (durationMilliseconds > 0)
+			{
+				fraction = (double)positionMilliseconds / (double)durationMilliseconds;
+			}
+			m_miniPlayer.SetProgress(fraction);
+			if (m_nowPlayingView != null)
+			{
+				m_nowPlayingView.UpdatePosition(positionMilliseconds, durationMilliseconds);
+			}
+		}
+
+		public void OnCurrentTrackChanged(PulseTrack track)
+		{
+			if (track == null)
+			{
+				return;
+			}
+			m_currentTrack = track;
+			int foundIndex = m_currentQueue.IndexOf(track);
+			if (foundIndex >= 0)
+			{
+				m_currentQueueIndex = foundIndex;
+			}
+			m_miniPlayer.SetTrack(track);
+			ShowMiniPlayer();
+			if (m_nowPlayingView != null)
+			{
+				m_nowPlayingView.SetTrack(track);
+			}
+		}
+
+		public void OnTrackEnded()
+		{
+			m_playbackState = ePlaybackState.Ended;
+			m_miniPlayer.SetPlaying(false);
+			if (m_nowPlayingView != null)
+			{
+				m_nowPlayingView.SetPlaying(false);
+			}
 		}
 
 		public void OnPlayArtist(PulseArtist artist, bool shuffle)
@@ -274,13 +375,17 @@ namespace Thump
 
 		public void OpenNowPlaying()
 		{
-			NowPlayingView nowPlaying = new NowPlayingView(this);
-			nowPlaying.Initialize();
+			if (m_nowPlayingView == null)
+			{
+				m_nowPlayingView = new NowPlayingView(this);
+				m_nowPlayingView.Initialize();
+			}
 			if (m_currentTrack != null)
 			{
-				nowPlaying.SetTrack(m_currentTrack);
+				m_nowPlayingView.SetTrack(m_currentTrack);
 			}
-			PushDetail(nowPlaying);
+			m_nowPlayingView.SetPlaying(m_playbackState == ePlaybackState.Playing);
+			PushDetail(m_nowPlayingView);
 		}
 
 		public void ShowMiniPlayer()

@@ -16,6 +16,7 @@ namespace Thump.Views
 		private Slider m_seekSlider;
 		private Label m_totalTimeLabel;
 		private Button m_playPauseButton;
+		private bool m_userSeeking;
 
 		public NowPlayingView(MainView mainView) : base(mainView)
 		{
@@ -158,6 +159,8 @@ namespace Thump.Views
 			m_seekSlider.MinimumTrackColor = ThumpColors.Accent;
 			m_seekSlider.MaximumTrackColor = ThumpColors.Divider;
 			m_seekSlider.ThumbColor = ThumpColors.Accent;
+			m_seekSlider.DragStarted += OnSeekDragStarted;
+			m_seekSlider.DragCompleted += OnSeekDragCompleted;
 			Grid.SetColumn(m_seekSlider, 1);
 			seekGrid.Children.Add(m_seekSlider);
 
@@ -296,6 +299,38 @@ namespace Thump.Views
 			m_art.SetCoverArt(song.ImageID);
 		}
 
+		public void SetPlaying(bool playing)
+		{
+			if (playing)
+			{
+				m_playPauseButton.Text = "⏸";
+			}
+			else
+			{
+				m_playPauseButton.Text = "▶";
+			}
+		}
+
+		public void UpdatePosition(long positionMilliseconds, long durationMilliseconds)
+		{
+			if (m_userSeeking)
+			{
+				return;
+			}
+			int positionSeconds = (int)(positionMilliseconds / 1000);
+			int durationSeconds = (int)(durationMilliseconds / 1000);
+			m_currentTimeLabel.Text = FormatDuration(positionSeconds);
+			m_totalTimeLabel.Text = FormatDuration(durationSeconds);
+			if (durationMilliseconds > 0)
+			{
+				m_seekSlider.Value = (double)positionMilliseconds / (double)durationMilliseconds * m_seekSlider.Maximum;
+			}
+			else
+			{
+				m_seekSlider.Value = 0;
+			}
+		}
+
 		private static string FormatDuration(int totalSeconds)
 		{
 			int minutes = totalSeconds / 60;
@@ -319,14 +354,33 @@ namespace Thump.Views
 
 		private void OnPlayPauseClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnTogglePlayPause();
 		}
 
 		private void OnPrevClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnPrevious();
 		}
 
 		private void OnNextClicked(object sender, EventArgs e)
 		{
+			m_mainView.OnNext();
+		}
+
+		private void OnSeekDragStarted(object sender, EventArgs e)
+		{
+			m_userSeeking = true;
+		}
+
+		private void OnSeekDragCompleted(object sender, EventArgs e)
+		{
+			m_userSeeking = false;
+			double fraction = 0;
+			if (m_seekSlider.Maximum > 0)
+			{
+				fraction = m_seekSlider.Value / m_seekSlider.Maximum;
+			}
+			m_mainView.OnSeekToFraction(fraction);
 		}
 
 		private void OnShuffleClicked(object sender, EventArgs e)

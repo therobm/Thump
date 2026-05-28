@@ -181,6 +181,44 @@ namespace Thump.Data
 			return File.ReadAllBytes(filePath);
 		}
 
+		public string GetBlobFilePath(string blobKey)
+		{
+			string filePath;
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT file_path FROM blobs WHERE blob_key = $k";
+				cmd.Parameters.AddWithValue("$k", blobKey);
+				object result = cmd.ExecuteScalar();
+				if (result == null)
+				{
+					return null;
+				}
+				if (result == DBNull.Value)
+				{
+					return null;
+				}
+				filePath = (string)result;
+			}
+			if (!File.Exists(filePath))
+			{
+				using (SqliteCommand cmd = m_connection.CreateCommand())
+				{
+					cmd.CommandText = "DELETE FROM blobs WHERE blob_key = $k";
+					cmd.Parameters.AddWithValue("$k", blobKey);
+					cmd.ExecuteNonQuery();
+				}
+				return null;
+			}
+			using (SqliteCommand touch = m_connection.CreateCommand())
+			{
+				touch.CommandText = "UPDATE blobs SET last_accessed = $t WHERE blob_key = $k";
+				touch.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+				touch.Parameters.AddWithValue("$k", blobKey);
+				touch.ExecuteNonQuery();
+			}
+			return filePath;
+		}
+
 		public void WriteBlob(string blobKey, byte[] data, string contentType)
 		{
 			string safeName = MakeSafeFileName(blobKey);
