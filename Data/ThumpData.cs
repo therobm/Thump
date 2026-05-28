@@ -330,8 +330,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			//todo search support, we'll think about local vs network before doing anything here
-			callback(null);
+			m_pulseClient.Search(query, callback);
 		}
 
 		public void GetCoverArt(string coverArtId, Action<byte[]> callback)

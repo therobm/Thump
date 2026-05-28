@@ -10,6 +10,9 @@ namespace Thump.Views
 	public class SearchView : ThumpView
 	{
 		private Entry m_searchEntry;
+		private Label m_artistsHeader;
+		private Label m_albumsHeader;
+		private Label m_songsHeader;
 		private CollectionView m_artistResults;
 		private CollectionView m_albumResults;
 		private CollectionView m_songResults;
@@ -76,38 +79,45 @@ namespace Thump.Views
 			StackLayout stack = new StackLayout();
 			stack.Spacing = 16;
 
-			Label artistsHeader = new Label();
-			artistsHeader.Text = "Artists";
-			artistsHeader.FontSize = 16;
-			artistsHeader.TextColor = ThumpColors.OnBackground;
-			artistsHeader.Padding = new Thickness(16, 0);
-			stack.Children.Add(artistsHeader);
+			m_artistsHeader = new Label();
+			m_artistsHeader.Text = "Artists";
+			m_artistsHeader.FontSize = 16;
+			m_artistsHeader.TextColor = ThumpColors.OnBackground;
+			m_artistsHeader.Padding = new Thickness(16, 0);
+			stack.Children.Add(m_artistsHeader);
 
 			m_artistResults = new CollectionView();
 			m_artistResults.ItemTemplate = new DataTemplate(typeof(ArtistRowTile));
 			stack.Children.Add(m_artistResults);
 
-			Label albumsHeader = new Label();
-			albumsHeader.Text = "Albums";
-			albumsHeader.FontSize = 16;
-			albumsHeader.TextColor = ThumpColors.OnBackground;
-			albumsHeader.Padding = new Thickness(16, 0);
-			stack.Children.Add(albumsHeader);
+			m_albumsHeader = new Label();
+			m_albumsHeader.Text = "Albums";
+			m_albumsHeader.FontSize = 16;
+			m_albumsHeader.TextColor = ThumpColors.OnBackground;
+			m_albumsHeader.Padding = new Thickness(16, 0);
+			stack.Children.Add(m_albumsHeader);
 
 			m_albumResults = new CollectionView();
 			m_albumResults.ItemTemplate = new DataTemplate(typeof(AlbumRowTile));
 			stack.Children.Add(m_albumResults);
 
-			Label songsHeader = new Label();
-			songsHeader.Text = "Songs";
-			songsHeader.FontSize = 16;
-			songsHeader.TextColor = ThumpColors.OnBackground;
-			songsHeader.Padding = new Thickness(16, 0);
-			stack.Children.Add(songsHeader);
+			m_songsHeader = new Label();
+			m_songsHeader.Text = "Songs";
+			m_songsHeader.FontSize = 16;
+			m_songsHeader.TextColor = ThumpColors.OnBackground;
+			m_songsHeader.Padding = new Thickness(16, 0);
+			stack.Children.Add(m_songsHeader);
 
 			m_songResults = new CollectionView();
 			m_songResults.ItemTemplate = new DataTemplate(typeof(TrackRowTile));
 			stack.Children.Add(m_songResults);
+
+			m_artistsHeader.IsVisible = false;
+			m_artistResults.IsVisible = false;
+			m_albumsHeader.IsVisible = false;
+			m_albumResults.IsVisible = false;
+			m_songsHeader.IsVisible = false;
+			m_songResults.IsVisible = false;
 
 			scroll.Content = stack;
 
@@ -135,13 +145,52 @@ namespace Thump.Views
 			if (results == null)
 			{
 				m_artistResults.ItemsSource = null;
+				m_artistResults.IsVisible = false;
+				m_artistsHeader.IsVisible = false;
 				m_albumResults.ItemsSource = null;
+				m_albumResults.IsVisible = false;
+				m_albumsHeader.IsVisible = false;
 				m_songResults.ItemsSource = null;
+				m_songResults.IsVisible = false;
+				m_songsHeader.IsVisible = false;
 				return;
 			}
-			m_artistResults.ItemsSource = results.Artists;
-			m_albumResults.ItemsSource = results.Albums;
-			m_songResults.ItemsSource = results.Songs;
+			if (results.Artists != null && results.Artists.Count > 0)
+			{
+				m_artistResults.ItemsSource = results.Artists;
+				m_artistResults.IsVisible = true;
+				m_artistsHeader.IsVisible = true;
+			}
+			else
+			{
+				m_artistResults.ItemsSource = null;
+				m_artistResults.IsVisible = false;
+				m_artistsHeader.IsVisible = false;
+			}
+			if (results.Albums != null && results.Albums.Count > 0)
+			{
+				m_albumResults.ItemsSource = results.Albums;
+				m_albumResults.IsVisible = true;
+				m_albumsHeader.IsVisible = true;
+			}
+			else
+			{
+				m_albumResults.ItemsSource = null;
+				m_albumResults.IsVisible = false;
+				m_albumsHeader.IsVisible = false;
+			}
+			if (results.Songs != null && results.Songs.Count > 0)
+			{
+				m_songResults.ItemsSource = results.Songs;
+				m_songResults.IsVisible = true;
+				m_songsHeader.IsVisible = true;
+			}
+			else
+			{
+				m_songResults.ItemsSource = null;
+				m_songResults.IsVisible = false;
+				m_songsHeader.IsVisible = false;
+			}
 		}
 	}
 }
