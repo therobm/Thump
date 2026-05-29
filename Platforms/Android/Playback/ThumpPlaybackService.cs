@@ -48,7 +48,7 @@ namespace Thump.Playback
 			builder.SetAudioAttributes(audioAttributes, true);
 
 			DefaultExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();
-			extractorsFactory.SetMp3ExtractorFlags( Mp3Extractor.FlagDisableId3Metadata);
+			extractorsFactory.SetMp3ExtractorFlags( Mp3Extractor.FlagEnableConstantBitrateSeeking | Mp3Extractor.FlagDisableId3Metadata);
 
 			ByteArrayDataSourceFactory dataSourceFactory = new ByteArrayDataSourceFactory(s_ThumpData);
 			DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory);

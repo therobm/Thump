@@ -80,11 +80,6 @@ namespace Thump.Playback
 				m_bytesRemaining = 0;
 			}
 
-			if (dataSpec.Length != C.LengthUnset)
-			{
-				m_bytesRemaining = (int)System.Math.Min(m_bytesRemaining, dataSpec.Length);
-			}
-
 			TransferStarted(dataSpec);
 			//Log.Warn("ByteArrayDataSource.Open done bytes=" + m_bytes.Length + " remaining=" + m_bytesRemaining);
 			return m_bytesRemaining;

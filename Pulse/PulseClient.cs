@@ -486,15 +486,15 @@ namespace Thump.Pulse
 					{
 						bool validParams = true;
 
-						JsonElement playlists;
+						JsonElement playlists = default;
 						if (!playlistResponse.TryGetProperty("playlists", out playlists))
 							validParams = false;
 
-						JsonElement playlistArray;
-						if (!playlists.TryGetProperty("playlist", out playlistArray))
+						JsonElement playlistArray = default;
+						if (validParams && !playlists.TryGetProperty("playlist", out playlistArray))
 							validParams = false;						
 											
-						if (playlistArray.ValueKind != JsonValueKind.Array)
+						if (validParams && playlistArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 
 						if (validParams)
