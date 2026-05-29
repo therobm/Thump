@@ -268,7 +268,7 @@ namespace Thump.Data
 
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT COUNT(*) FROM tracks";
+				cmd.CommandText = "SELECT COUNT(*) FROM blobs WHERE content_type = 'audio'";
 				stats.TrackCount = Convert.ToInt32(cmd.ExecuteScalar());
 			}
 			using (SqliteCommand cmd = m_connection.CreateCommand())
