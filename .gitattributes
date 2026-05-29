@@ -1,0 +1,5 @@
+# Keep CI scripts and workflow files LF so they run correctly on Linux runners
+# regardless of a contributor's core.autocrlf setting.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
