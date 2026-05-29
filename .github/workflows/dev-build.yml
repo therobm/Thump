@@ -35,11 +35,11 @@ jobs:
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
 
-      - name: Compute version
+      - name: Read version
         id: version
         shell: bash
         run: |
-          version="$(bash .github/version.sh)-dev"
+          version="$(tr -d ' \t\r\n' < VERSION)-dev"
           code=$(git rev-list --count HEAD)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "code=${code}" >> "$GITHUB_OUTPUT"

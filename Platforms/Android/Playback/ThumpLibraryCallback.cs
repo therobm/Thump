@@ -24,10 +24,12 @@ namespace Thump.Playback
 		private const string s_popularArtistsId = "home_popular";
 
 		private ThumpData m_serviceData;
+		private QueuePrefetcher m_prefetcher;
 
-		public ThumpLibraryCallback(ThumpData data)
+		public ThumpLibraryCallback(ThumpData data, QueuePrefetcher prefetcher)
 		{
 			m_serviceData = data;
+			m_prefetcher = prefetcher;
 		}
 
 		public MediaSession.ConnectionResult OnConnect(MediaSession session, MediaSession.ControllerInfo controller)
@@ -114,7 +116,7 @@ namespace Thump.Playback
 			return (IListenableFuture)CallbackToFutureAdapter.GetFuture(resolver);
 		}
 
-		private void LoadChildren(string parentId, MediaLibraryService.LibraryParams libraryParams, CallbackToFutureAdapter.Completer completer)
+		private void LoadChildren(string parentId, MediaLibraryService.LibraryParams libraryParams, OneShotCompleter completer)
 		{
 			MediaLibraryService.LibraryParams styleParams = BuildContentStyleParams();
 			if (parentId == s_homeId)
@@ -447,7 +449,7 @@ namespace Thump.Playback
 			return (IListenableFuture)CallbackToFutureAdapter.GetFuture(resolver);
 		}
 
-		private void ResolveItems(IList<MediaItem> items, int index, Java.Util.ArrayList resolved, CallbackToFutureAdapter.Completer completer)
+		private void ResolveItems(IList<MediaItem> items, int index, Java.Util.ArrayList resolved, OneShotCompleter completer)
 		{
 			if (index >= items.Count)
 			{
@@ -483,7 +485,7 @@ namespace Thump.Playback
 			return (IListenableFuture)CallbackToFutureAdapter.GetFuture(resolver);
 		}
 
-		private void ResolveSetItems(IList<MediaItem> items, int index, List<MediaItem> resolved, int startIndex, long startPositionMs, CallbackToFutureAdapter.Completer completer)
+		private void ResolveSetItems(IList<MediaItem> items, int index, List<MediaItem> resolved, int startIndex, long startPositionMs, OneShotCompleter completer)
 		{
 			if (index >= items.Count)
 			{
@@ -514,7 +516,7 @@ namespace Thump.Playback
 			});
 		}
 
-		private bool TryExpandSetCollection(IList<MediaItem> items, CallbackToFutureAdapter.Completer completer)
+		private bool TryExpandSetCollection(IList<MediaItem> items, OneShotCompleter completer)
 		{
 			if (items == null)
 			{
@@ -531,14 +533,24 @@ namespace Thump.Playback
 			}
 			FetchCollectionTracks(request, (songs) =>
 			{
-				List<MediaItem> trackItems = BuildTrackItems(songs);
-				List<MediaItem> resolved = new List<MediaItem>();
-				ResolveSetItems(trackItems, 0, resolved, 0, 0, completer);
+				m_prefetcher.LoadCollection(songs, 0, (startItem) =>
+				{
+					if (startItem == null)
+					{
+						MediaSession.MediaItemsWithStartPosition empty = new MediaSession.MediaItemsWithStartPosition(new List<MediaItem>(), 0, 0);
+						completer.Set(empty);
+						return;
+					}
+					List<MediaItem> single = new List<MediaItem>();
+					single.Add(startItem);
+					MediaSession.MediaItemsWithStartPosition result = new MediaSession.MediaItemsWithStartPosition(single, 0, 0);
+					completer.Set(result);
+				});
 			});
 			return true;
 		}
 
-		private bool TryExpandAddCollection(IList<MediaItem> items, CallbackToFutureAdapter.Completer completer)
+		private bool TryExpandAddCollection(IList<MediaItem> items, OneShotCompleter completer)
 		{
 			if (items == null)
 			{
@@ -1126,6 +1138,28 @@ namespace Thump.Playback
 			public string Id;
 		}
 
+		private class OneShotCompleter
+		{
+			private CallbackToFutureAdapter.Completer m_completer;
+			private bool m_done;
+
+			public OneShotCompleter(CallbackToFutureAdapter.Completer completer)
+			{
+				m_completer = completer;
+				m_done = false;
+			}
+
+			public void Set(Java.Lang.Object result)
+			{
+				if (m_done)
+				{
+					return;
+				}
+				m_done = true;
+				m_completer.Set(result);
+			}
+		}
+
 		private class ImmediateResolver : Java.Lang.Object, CallbackToFutureAdapter.IResolver
 		{
 			private Java.Lang.Object m_value;
@@ -1137,7 +1171,8 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
-				completer.Set(m_value);
+				OneShotCompleter guard = new OneShotCompleter(completer);
+				guard.Set(m_value);
 				return null;
 			}
 		}
@@ -1157,7 +1192,8 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
-				m_owner.LoadChildren(m_parentId, m_params, completer);
+				OneShotCompleter guard = new OneShotCompleter(completer);
+				m_owner.LoadChildren(m_parentId, m_params, guard);
 				return null;
 			}
 		}
@@ -1175,13 +1211,14 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
-				bool handled = m_owner.TryExpandAddCollection(m_items, completer);
+				OneShotCompleter guard = new OneShotCompleter(completer);
+				bool handled = m_owner.TryExpandAddCollection(m_items, guard);
 				if (handled)
 				{
 					return null;
 				}
 				Java.Util.ArrayList resolved = new Java.Util.ArrayList();
-				m_owner.ResolveItems(m_items, 0, resolved, completer);
+				m_owner.ResolveItems(m_items, 0, resolved, guard);
 				return null;
 			}
 		}
@@ -1203,13 +1240,14 @@ namespace Thump.Playback
 
 			public Java.Lang.Object AttachCompleter(CallbackToFutureAdapter.Completer completer)
 			{
-				bool handled = m_owner.TryExpandSetCollection(m_items, completer);
+				OneShotCompleter guard = new OneShotCompleter(completer);
+				bool handled = m_owner.TryExpandSetCollection(m_items, guard);
 				if (handled)
 				{
 					return null;
 				}
 				List<MediaItem> resolved = new List<MediaItem>();
-				m_owner.ResolveSetItems(m_items, 0, resolved, m_startIndex, m_startPositionMs, completer);
+				m_owner.ResolveSetItems(m_items, 0, resolved, m_startIndex, m_startPositionMs, guard);
 				return null;
 			}
 		}

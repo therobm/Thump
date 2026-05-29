@@ -1,12 +1,15 @@
 name: Build and Release
 
 # Unified build strategy (shared with Pulse/Flatline), adapted for the MAUI
-# Android app: a merge to master builds a signed release APK, versions it
-# Major.Minor.Build (Major.Minor from the VERSION file, Build from git history
-# via .github/version.sh) and publishes a GitHub Release. The Android
-# versionCode is the total commit count so it always increases monotonically,
-# even across a VERSION bump (when Build resets to 0). Signing comes from repo
-# secrets; the keystore never lives in the repo.
+# Android app: a merge to master builds a signed release APK versioned straight
+# from the VERSION file (full Major.Minor.Build), publishes a GitHub Release,
+# then increments the build component in VERSION and commits it back to master
+# ([skip ci], repo token, so it does not re-trigger). To bump the major or
+# minor version, edit VERSION by hand and reset the build (e.g. 0.1.12 ->
+# 0.2.0). The Android versionCode is the total commit count, a separate
+# always-increasing integer (the displayed Build resets on a Major/Minor bump,
+# so it can't drive versionCode). Signing comes from repo secrets; the keystore
+# never lives in the repo.
 
 on:
   workflow_dispatch:
@@ -29,8 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history so version.sh can count commits since the VERSION bump
-          # and the versionCode can count total commits.
+          ref: master
+          # Full history so the Android versionCode can count total commits,
+          # and so the build-number bump can be committed back to master.
           fetch-depth: 0
 
       - name: Setup .NET
@@ -47,11 +51,15 @@ jobs:
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
 
-      - name: Compute version
+      - name: Read version
         id: version
         shell: bash
         run: |
-          version=$(bash .github/version.sh)
+          version=$(tr -d ' \t\r\n' < VERSION)
+          if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "VERSION must be MAJOR.MINOR.BUILD; got '$version'" >&2
+            exit 1
+          fi
           code=$(git rev-list --count HEAD)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "code=${code}" >> "$GITHUB_OUTPUT"
@@ -100,3 +108,18 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+
+      - name: Increment build number in VERSION
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          major=$(echo "$version" | cut -d. -f1)
+          minor=$(echo "$version" | cut -d. -f2)
+          build=$(echo "$version" | cut -d. -f3)
+          next="${major}.${minor}.$((build + 1))"
+          printf '%s\n' "$next" > VERSION
+          git config user.name "Vibratron"
+          git config user.email "vibratron@flatline.local"
+          git add VERSION
+          git commit -m "Bump build to ${next} [skip ci]"
+          git push origin HEAD:master
