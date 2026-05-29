@@ -21,6 +21,7 @@ namespace Thump.Playback
 		public static ThumpData s_ThumpData;
 
 		private IExoPlayer m_player;
+		private QueuePrefetcher m_prefetcher;
 		private MediaLibraryService.MediaLibrarySession m_session;
 		private CarConnectionReceiver m_carReceiver;
 
@@ -45,7 +46,9 @@ namespace Thump.Playback
 
 			m_player = builder.Build();
 
-			MediaLibraryService.MediaLibrarySession.Builder sessionBuilder = new MediaLibraryService.MediaLibrarySession.Builder(this, m_player, new ThumpLibraryCallback(s_ThumpData));
+			m_prefetcher = new QueuePrefetcher(m_player, s_ThumpData);
+
+			MediaLibraryService.MediaLibrarySession.Builder sessionBuilder = new MediaLibraryService.MediaLibrarySession.Builder(this, m_player, new ThumpLibraryCallback(s_ThumpData, m_prefetcher));
 			PendingIntent sessionActivity = BuildSessionActivity();
 			if (sessionActivity != null)
 			{

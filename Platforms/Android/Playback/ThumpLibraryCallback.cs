@@ -24,10 +24,12 @@ namespace Thump.Playback
 		private const string s_popularArtistsId = "home_popular";
 
 		private ThumpData m_serviceData;
+		private QueuePrefetcher m_prefetcher;
 
-		public ThumpLibraryCallback(ThumpData data)
+		public ThumpLibraryCallback(ThumpData data, QueuePrefetcher prefetcher)
 		{
 			m_serviceData = data;
+			m_prefetcher = prefetcher;
 		}
 
 		public MediaSession.ConnectionResult OnConnect(MediaSession session, MediaSession.ControllerInfo controller)
@@ -531,9 +533,19 @@ namespace Thump.Playback
 			}
 			FetchCollectionTracks(request, (songs) =>
 			{
-				List<MediaItem> trackItems = BuildTrackItems(songs);
-				List<MediaItem> resolved = new List<MediaItem>();
-				ResolveSetItems(trackItems, 0, resolved, 0, 0, completer);
+				m_prefetcher.LoadCollection(songs, 0, (startItem) =>
+				{
+					if (startItem == null)
+					{
+						MediaSession.MediaItemsWithStartPosition empty = new MediaSession.MediaItemsWithStartPosition(new List<MediaItem>(), 0, 0);
+						completer.Set(empty);
+						return;
+					}
+					List<MediaItem> single = new List<MediaItem>();
+					single.Add(startItem);
+					MediaSession.MediaItemsWithStartPosition result = new MediaSession.MediaItemsWithStartPosition(single, 0, 0);
+					completer.Set(result);
+				});
 			});
 			return true;
 		}
