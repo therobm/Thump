@@ -13,6 +13,7 @@ namespace Thump.Views.Tiles
 		private Label m_titleLabel;
 		private Label m_artistLabel;
 		private Label m_durationLabel;
+		private Label m_cacheIcon;
 		private PulseTrack m_song;
 
 		public TrackRowTile() : base(MainView.Self)
@@ -31,16 +32,20 @@ namespace Thump.Views.Tiles
 			textColumn.Width = GridLength.Star;
 			ColumnDefinition durationColumn = new ColumnDefinition();
 			durationColumn.Width = GridLength.Auto;
+			ColumnDefinition cacheIconColumn = new ColumnDefinition();
+			cacheIconColumn.Width = GridLength.Auto;
 			ColumnDefinition optionsColumn = new ColumnDefinition();
 			optionsColumn.Width = GridLength.Auto;
 			grid.ColumnDefinitions.Add(artColumn);
 			grid.ColumnDefinitions.Add(textColumn);
 			grid.ColumnDefinitions.Add(durationColumn);
+			grid.ColumnDefinitions.Add(cacheIconColumn);
 			grid.ColumnDefinitions.Add(optionsColumn);
 
 			grid.Children.Add(BuildArt());
 			grid.Children.Add(BuildText());
 			grid.Children.Add(BuildDuration());
+			grid.Children.Add(BuildCacheIcon());
 			grid.Children.Add(BuildOptions());
 
 			TapGestureRecognizer tap = new TapGestureRecognizer();
@@ -98,6 +103,21 @@ namespace Thump.Views.Tiles
 			return m_durationLabel;
 		}
 
+		private View BuildCacheIcon()
+		{
+			m_cacheIcon = new Label();
+			m_cacheIcon.FontFamily = "MaterialIcons";
+			m_cacheIcon.Text = "\uE837";
+			m_cacheIcon.FontSize = 16;
+			m_cacheIcon.TextColor = ThumpColors.Accent;
+			m_cacheIcon.VerticalOptions = LayoutOptions.Center;
+			m_cacheIcon.Margin = new Thickness(0, 0, 4, 0);
+			m_cacheIcon.IsVisible = false;
+
+			Grid.SetColumn(m_cacheIcon, 3);
+			return m_cacheIcon;
+		}
+
 		private View BuildOptions()
 		{
 			Button optionsButton = new Button();
@@ -111,8 +131,13 @@ namespace Thump.Views.Tiles
 			optionsButton.VerticalOptions = LayoutOptions.Center;
 			optionsButton.Clicked += OnOptionsClicked;
 
-			Grid.SetColumn(optionsButton, 3);
+			Grid.SetColumn(optionsButton, 4);
 			return optionsButton;
+		}
+
+		public void SetCached(bool isCached)
+		{
+			m_cacheIcon.IsVisible = isCached;
 		}
 
 		public override void Initialize()
@@ -133,6 +158,7 @@ namespace Thump.Views.Tiles
 			m_artistLabel.Text = song.Artist;
 			m_durationLabel.Text = FormatDuration(song.Duration);
 			m_art.SetCoverArt(song.ImageID);
+			// Cache state is not determined here; the owner drives the cache icon via SetCached(...).
 		}
 
 		private static string FormatDuration(int totalSeconds)
