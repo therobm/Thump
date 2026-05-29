@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
@@ -252,6 +253,11 @@ namespace Thump.Pulse
 
 		public void GetArtists(Action<List<PulseArtist>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseArtist>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseArtist> results = new List<PulseArtist>();
@@ -285,7 +291,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
 			});
@@ -293,6 +299,11 @@ namespace Thump.Pulse
 
 		public void GetPodcasts(Action<List<PulsePodcastChannel>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulsePodcastChannel>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulsePodcastChannel> results = new List<PulsePodcastChannel>();
@@ -314,7 +325,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulsePodcastChannel> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -330,8 +341,7 @@ namespace Thump.Pulse
 			channel.CoverArt = JsonHelper.GetString(element, "coverArt");
 			channel.Url = JsonHelper.GetString(element, "url");
 			channel.Status = JsonHelper.GetString(element, "status");
-			if (element.TryGetProperty("episode", out JsonElement episodeArray) &&
-				episodeArray.ValueKind == JsonValueKind.Array)
+			if (element.TryGetProperty("episode", out JsonElement episodeArray) && episodeArray.ValueKind == JsonValueKind.Array)
 			{
 				foreach (JsonElement episodeElement in episodeArray.EnumerateArray())
 				{
@@ -357,6 +367,11 @@ namespace Thump.Pulse
 
 		public void Search(string query, Action<PulseSearchData> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new PulseSearchData());
+				return;
+			}
 			Task.Run(() =>
 			{
 				PulseSearchData result = new PulseSearchData();
@@ -402,9 +417,20 @@ namespace Thump.Pulse
 
 					if (SubsonicGet("getPlaylists", out JsonElement playlistResponse))
 					{
-						if (playlistResponse.TryGetProperty("playlists", out JsonElement playlists) &&
-							playlists.TryGetProperty("playlist", out JsonElement playlistArray) &&
-							playlistArray.ValueKind == JsonValueKind.Array)
+						bool validParams = true;
+
+						JsonElement playlists;
+						if (!playlistResponse.TryGetProperty("playlists", out playlists))
+							validParams = false;
+
+						JsonElement playlistArray;
+						if (!playlists.TryGetProperty("playlist", out playlistArray))
+							validParams = false;						
+											
+						if (playlistArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+
+						if (validParams)
 						{
 							string lowerQuery = query.ToLowerInvariant();
 							foreach (JsonElement element in playlistArray.EnumerateArray())
@@ -421,7 +447,6 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
 				}
 				PulseSearchData captured = result;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -430,6 +455,11 @@ namespace Thump.Pulse
 
 		public void GetArtistAlbums(string artistId, Action<List<PulseAlbum>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseAlbum>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseAlbum> results = new List<PulseAlbum>();
@@ -449,7 +479,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseAlbum> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -458,6 +488,11 @@ namespace Thump.Pulse
 
 		public void GetAlbum(string albumId, Action<PulseAlbum> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new PulseAlbum());
+				return;
+			}
 			Task.Run(() =>
 			{
 				PulseAlbum result = new PulseAlbum();
@@ -476,7 +511,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				PulseAlbum captured = result;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -499,6 +534,11 @@ namespace Thump.Pulse
 
 		public void GetAlbums(Action<List<PulseAlbum>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseAlbum>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseAlbum> results = new List<PulseAlbum>();
@@ -531,7 +571,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseAlbum> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -540,6 +580,11 @@ namespace Thump.Pulse
 
 		public void CreatePlaylist(string name, Action<PulsePlaylist> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(null);
+				return;
+			}
 			Task.Run(() =>
 			{
 				PulsePlaylist created = null;
@@ -557,7 +602,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				PulsePlaylist captured = created;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -566,6 +611,11 @@ namespace Thump.Pulse
 
 		public void RenamePlaylist(string playlistId, string newName, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -578,7 +628,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -587,6 +637,11 @@ namespace Thump.Pulse
 
 		public void Star(string trackId, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -598,7 +653,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -607,6 +662,11 @@ namespace Thump.Pulse
 
 		public void Unstar(string trackId, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -618,7 +678,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -627,6 +687,11 @@ namespace Thump.Pulse
 
 		public void DeletePlaylist(string playlistId, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -638,7 +703,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -647,19 +712,23 @@ namespace Thump.Pulse
 
 		public void AddTrackToPlaylist(string playlistId, string songId, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
 				try
 				{
-					string param = "playlistId=" + Uri.EscapeDataString(playlistId)
-						+ "&songIdToAdd=" + Uri.EscapeDataString(songId);
+					string param = "playlistId=" + Uri.EscapeDataString(playlistId) + "&songIdToAdd=" + Uri.EscapeDataString(songId);
 					ok = SubsonicGet("updatePlaylist", out JsonElement response, param);
 				}
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -668,6 +737,11 @@ namespace Thump.Pulse
 
 		public void RemoveTrackFromPlaylist(string playlistId, int songIndex, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -680,7 +754,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -689,6 +763,11 @@ namespace Thump.Pulse
 
 		public void ReorderPlaylist(string playlistId, int fromIndex, int toIndex, List<PulseTrack> newOrder, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -699,7 +778,7 @@ namespace Thump.Pulse
 					{
 						divergence = toIndex;
 					}
-					System.Text.StringBuilder param = new System.Text.StringBuilder();
+					StringBuilder param = new StringBuilder();
 					param.Append("playlistId=").Append(Uri.EscapeDataString(playlistId));
 					for (int idx = newOrder.Count - 1; idx >= divergence; idx--)
 					{
@@ -714,7 +793,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -723,6 +802,11 @@ namespace Thump.Pulse
 
 		public void MarkPlaylistPlayed(string playlistId, Action<bool> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(false);
+				return;
+			}
 			Task.Run(() =>
 			{
 				bool ok = false;
@@ -735,7 +819,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				bool result = ok;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
@@ -744,6 +828,11 @@ namespace Thump.Pulse
 
 		public void GetPlaylists(Action<List<PulsePlaylist>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulsePlaylist>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulsePlaylist> results = new List<PulsePlaylist>();
@@ -765,7 +854,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
 			});
@@ -773,6 +862,11 @@ namespace Thump.Pulse
 
 		public void GetPlaylist(string playlistId, Action<PulsePlaylist> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new PulsePlaylist());
+				return;
+			}
 			Task.Run(() =>
 			{
 				PulsePlaylist result = new PulsePlaylist();
@@ -789,7 +883,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				PulsePlaylist captured = result;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -847,12 +941,15 @@ namespace Thump.Pulse
 				onComplete(null);
 				return;
 			}
-
-			int size = 512;//?? Where the fuck did this come from, I sure as fuck don't support it
-			string url = BuildCoverArtUrl(coverArtId, size);
+			string url = BuildCoverArtUrl(coverArtId);
 			if (m_imageCache.TryGetValue(url, out byte[] cached))
 			{
 				onComplete(cached);
+				return;
+			}
+			if (!IsOnline())
+			{
+				onComplete(null);
 				return;
 			}
 			Task.Run(() =>
@@ -873,7 +970,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 					MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
 				}
 			});
@@ -881,7 +978,7 @@ namespace Thump.Pulse
 
 		public void GetTrackAudio(string trackId, Action<byte[]> onComplete)
 		{
-			if (string.IsNullOrEmpty(trackId))
+			if (!IsOnline() || string.IsNullOrEmpty(trackId))
 			{
 				onComplete(null);
 				return;
@@ -904,7 +1001,6 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
 					MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
 				}
 			});
@@ -942,19 +1038,23 @@ namespace Thump.Pulse
 			return retVal;
 		}
 
-		private string BuildCoverArtUrl(string coverArtId, int size = 0)
+		private string BuildCoverArtUrl(string coverArtId)
 		{
 			if (string.IsNullOrEmpty(coverArtId))
 			{
 				return null;
 			}
-			string sizeParam = size > 0 ? "&size=" + size : "";
-			return BuildRestUrl("getCoverArt", "id=" + Uri.EscapeDataString(coverArtId) + sizeParam);
+
+			return BuildRestUrl("getCoverArt", "id=" + Uri.EscapeDataString(coverArtId));
 		}
 
 		public void GetRecentlyPlayed(Action<List<PulseObject>> onComplete)
 		{
-
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseObject>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseObject> results = new List<PulseObject>();
@@ -979,7 +1079,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
 			});
@@ -987,6 +1087,11 @@ namespace Thump.Pulse
 
 		public void GetPopularArtists(Action<List<PulseArtist>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseArtist>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseArtist> results = new List<PulseArtist>();
@@ -1018,7 +1123,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
 			});
@@ -1037,6 +1142,11 @@ namespace Thump.Pulse
 	
 		public void GetRecentlyAdded(Action<List<PulseObject>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseObject>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseObject> results = new List<PulseObject>();
@@ -1058,7 +1168,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseObject> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -1067,6 +1177,11 @@ namespace Thump.Pulse
 
 		public void GetGenres(Action<List<PulseGenre>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseGenre>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseGenre> results = new List<PulseGenre>();
@@ -1094,7 +1209,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseGenre> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -1103,6 +1218,11 @@ namespace Thump.Pulse
 
 		public void GetTopItems(Action<List<PulseObject>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseObject>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseObject> results = new List<PulseObject>();
@@ -1127,7 +1247,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseObject> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -1136,6 +1256,11 @@ namespace Thump.Pulse
 
 		public void GetTracksForGenre(string genre, Action<List<PulseTrack>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulseTrack>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulseTrack> results = new List<PulseTrack>();
@@ -1158,7 +1283,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				List<PulseTrack> captured = results;
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(captured); });
@@ -1172,6 +1297,11 @@ namespace Thump.Pulse
 
 		private void GetRankedPlaylists(string endpoint, int count, Action<List<PulsePlaylist>> onComplete)
 		{
+			if (!IsOnline())
+			{
+				onComplete(new List<PulsePlaylist>());
+				return;
+			}
 			Task.Run(() =>
 			{
 				List<PulsePlaylist> results = new List<PulsePlaylist>();
@@ -1196,7 +1326,7 @@ namespace Thump.Pulse
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					System.Diagnostics.Debugger.Break();
+
 				}
 				MainThread.BeginInvokeOnMainThread(() => { onComplete(results); });
 			});

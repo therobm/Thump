@@ -301,7 +301,7 @@ namespace Thump.Data
 				return;
 			}
 			string blobKey = "track:" + track.Id;
-			m_cache.Enqueue(() =>
+			m_cache.Execute(() =>
 			{
 				string existingPath = m_cache.GetBlobFilePath(blobKey);
 				if (!string.IsNullOrEmpty(existingPath))
@@ -316,7 +316,7 @@ namespace Thump.Data
 						MainThread.BeginInvokeOnMainThread(() => { callback(null); });
 						return;
 					}
-					m_cache.Enqueue(() =>
+					m_cache.Execute(() =>
 					{
 						m_cache.WriteBlob(blobKey, data, "audio");
 						string storedPath = m_cache.GetBlobFilePath(blobKey);
