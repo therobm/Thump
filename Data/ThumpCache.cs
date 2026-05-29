@@ -707,10 +707,37 @@ namespace Thump.Data
 
 		public List<PulseAlbum> GetAlbums()
 		{
-			return new List<PulseAlbum>();
+			List<PulseAlbum> result = new List<PulseAlbum>();
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT id, name, artist, artist_id, cover_art, year, song_count, duration FROM albums ORDER BY name";
+				using (SqliteDataReader reader = cmd.ExecuteReader())
+				{
+					while (reader.Read())
+					{
+						result.Add(ReadAlbumRow(reader));
+					}
+				}
+			}
+			return result;
 		}
 		public void UpdateAlbums(List<PulseAlbum> albums)
 		{
+			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
+			{
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM albums";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < albums.Count; idx++)
+				{
+					WriteAlbumRow(tx, albums[idx], now);
+				}
+				tx.Commit();
+			}
 		}
 
 		public List<PulseObject> GetRecentlyAdded()
@@ -723,10 +750,52 @@ namespace Thump.Data
 
 		public List<PulseGenre> GetGenres()
 		{
-			return new List<PulseGenre>();
+			List<PulseGenre> result = new List<PulseGenre>();
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT name, song_count, album_count FROM genres ORDER BY name";
+				using (SqliteDataReader reader = cmd.ExecuteReader())
+				{
+					while (reader.Read())
+					{
+						PulseGenre genre = new PulseGenre();
+						genre.Id = reader.GetString(0);
+						genre.Name = reader.GetString(0);
+						genre.SongCount = reader.GetInt32(1);
+						genre.AlbumCount = reader.GetInt32(2);
+						result.Add(genre);
+					}
+				}
+			}
+			return result;
 		}
 		public void UpdateGenres(List<PulseGenre> genres)
 		{
+			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
+			{
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM genres";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < genres.Count; idx++)
+				{
+					PulseGenre genre = genres[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
+					{
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO genres (name, song_count, album_count, fetched_at) VALUES ($name, $sc, $ac, $f)";
+						ins.Parameters.AddWithValue("$name", genre.Name);
+						ins.Parameters.AddWithValue("$sc", genre.SongCount);
+						ins.Parameters.AddWithValue("$ac", genre.AlbumCount);
+						ins.Parameters.AddWithValue("$f", now);
+						ins.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
+			}
 		}
 
 		public List<PulseTrack> GetTracksForGenre(string genre)
