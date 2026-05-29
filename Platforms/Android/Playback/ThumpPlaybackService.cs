@@ -35,6 +35,14 @@ namespace Thump.Playback
 
 			ExoPlayerBuilder builder = new ExoPlayerBuilder(this);
 			builder.SetHandleAudioBecomingNoisy(true);
+
+			// Request audio focus so ExoPlayer activates the audio route on play; without this the player streams but is silent until another app grabs focus.
+			AudioAttributes.Builder audioAttributesBuilder = new AudioAttributes.Builder();
+			audioAttributesBuilder.SetUsage(C.UsageMedia);
+			audioAttributesBuilder.SetContentType(C.AudioContentTypeMusic);
+			AudioAttributes audioAttributes = audioAttributesBuilder.Build();
+			builder.SetAudioAttributes(audioAttributes, true);
+
 			m_player = builder.Build();
 
 			MediaLibraryService.MediaLibrarySession.Builder sessionBuilder = new MediaLibraryService.MediaLibrarySession.Builder(this, m_player, new ThumpLibraryCallback(s_ThumpData));
