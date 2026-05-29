@@ -5,6 +5,8 @@ using Android.Content.PM;
 using AndroidX.Media3.Common;
 using AndroidX.Media3.ExoPlayer;
 using AndroidX.Media3.ExoPlayer.Source;
+using AndroidX.Media3.Extractor;
+using AndroidX.Media3.Extractor.Mp3;
 using AndroidX.Media3.Session;
 using Microsoft.Maui.Storage;
 using Thump.Data;
@@ -45,8 +47,11 @@ namespace Thump.Playback
 			AudioAttributes audioAttributes = audioAttributesBuilder.Build();
 			builder.SetAudioAttributes(audioAttributes, true);
 
+			DefaultExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();
+			extractorsFactory.SetMp3ExtractorFlags( Mp3Extractor.FlagDisableId3Metadata);
+
 			ByteArrayDataSourceFactory dataSourceFactory = new ByteArrayDataSourceFactory(s_ThumpData);
-			DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(dataSourceFactory);
+			DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory);
 			builder.SetMediaSourceFactory(mediaSourceFactory);
 
 			m_player = builder.Build();

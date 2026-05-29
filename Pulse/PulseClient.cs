@@ -302,12 +302,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getArtists", out JsonElement response))
 					{
 						JsonElement artists;
-						JsonElement indexes;
+						JsonElement indexes = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("artists", out artists))
 							validParams = false;
-						if (!artists.TryGetProperty("index", out indexes))
-							validParams = false;
+						if (validParams)
+						{
+							if (!artists.TryGetProperty("index", out indexes))
+								validParams = false;
+						}
 						if (indexes.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -360,12 +363,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getPodcasts", out JsonElement response, "includeEpisodes=true"))
 					{
 						JsonElement podcasts;
-						JsonElement channelArray;
+						JsonElement channelArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("podcasts", out podcasts))
 							validParams = false;
-						if (!podcasts.TryGetProperty("channel", out channelArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!podcasts.TryGetProperty("channel", out channelArray))
+								validParams = false;
+						}
 						if (channelArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -529,12 +535,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getArtist", out JsonElement response, "id=" + Uri.EscapeDataString(artistId)))
 					{
 						JsonElement artistElement;
-						JsonElement albumArray;
+						JsonElement albumArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("artist", out artistElement))
 							validParams = false;
-						if (!artistElement.TryGetProperty("album", out albumArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!artistElement.TryGetProperty("album", out albumArray))
+								validParams = false;
+						}
 						if (albumArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -623,12 +632,15 @@ namespace Thump.Pulse
 						}
 						int pageCount = 0;
 						JsonElement albumList;
-						JsonElement albumArray;
+						JsonElement albumArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("albumList2", out albumList))
 							validParams = false;
-						if (!albumList.TryGetProperty("album", out albumArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!albumList.TryGetProperty("album", out albumArray))
+								validParams = false;
+						}
 						if (albumArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -918,12 +930,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getPlaylists", out JsonElement response))
 					{
 						JsonElement playlists;
-						JsonElement playlistArray;
+						JsonElement playlistArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("playlists", out playlists))
 							validParams = false;
-						if (!playlists.TryGetProperty("playlist", out playlistArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!playlists.TryGetProperty("playlist", out playlistArray))
+								validParams = false;
+						}
 						if (playlistArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -1267,12 +1282,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getAlbumList2", out JsonElement response, "type=newest&size=50"))
 					{
 						JsonElement albumList;
-						JsonElement albumArray;
+						JsonElement albumArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("albumList2", out albumList))
 							validParams = false;
-						if (!albumList.TryGetProperty("album", out albumArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!albumList.TryGetProperty("album", out albumArray))
+								validParams = false;
+						}
 						if (albumArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -1309,12 +1327,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getGenres", out JsonElement response))
 					{
 						JsonElement genres;
-						JsonElement genreArray;
+						JsonElement genreArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("genres", out genres))
 							validParams = false;
-						if (!genres.TryGetProperty("genre", out genreArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!genres.TryGetProperty("genre", out genreArray))
+								validParams = false;
+						}
 						if (genreArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
@@ -1402,12 +1423,15 @@ namespace Thump.Pulse
 					if (SubsonicGet("getSongsByGenre", out JsonElement response, param))
 					{
 						JsonElement songsByGenre;
-						JsonElement songArray;
+						JsonElement songArray = default;
 						bool validParams = true;
 						if (!response.TryGetProperty("songsByGenre", out songsByGenre))
 							validParams = false;
-						if (!songsByGenre.TryGetProperty("song", out songArray))
-							validParams = false;
+						if (validParams)
+						{
+							if (!songsByGenre.TryGetProperty("song", out songArray))
+								validParams = false;
+						}
 						if (songArray.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)

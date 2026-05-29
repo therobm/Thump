@@ -506,7 +506,7 @@ namespace Thump.Playback
 			m_serviceData.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				MediaItem resolvedItem = item;
-				if (!isAvailable)
+				if (isAvailable)
 				{
 					Android.Net.Uri uri = MediaItemBuilder.GetURI(track);
 					resolvedItem = item.BuildUpon().SetUri(uri).Build();
