@@ -745,17 +745,12 @@ namespace Thump.Data
 			List<PulseObject> result = new List<PulseObject>();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "recently_added");
+				cmd.CommandText = "SELECT id, name, artist, artist_id, cover_art, year, song_count, duration FROM recently_added ORDER BY position";
 				using (SqliteDataReader reader = cmd.ExecuteReader())
 				{
 					while (reader.Read())
 					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null)
-						{
-							result.Add(ob);
-						}
+						result.Add(ReadAlbumRow(reader));
 					}
 				}
 			}
@@ -763,7 +758,35 @@ namespace Thump.Data
 		}
 		public void UpdateRecentlyAdded(List<PulseObject> albums)
 		{
-			ReplaceHomeSection("recently_added", albums);
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
+			{
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM recently_added";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < albums.Count; idx++)
+				{
+					PulseAlbum a = (PulseAlbum)albums[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
+					{
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO recently_added (position, id, name, artist, artist_id, cover_art, year, song_count, duration) VALUES ($pos, $id, $n, $a, $aid, $ca, $y, $sc, $d)";
+						ins.Parameters.AddWithValue("$pos", idx);
+						ins.Parameters.AddWithValue("$id", NullableParam(a.Id));
+						ins.Parameters.AddWithValue("$n", NullableParam(a.Name));
+						ins.Parameters.AddWithValue("$a", NullableParam(a.Artist));
+						ins.Parameters.AddWithValue("$aid", NullableParam(a.ArtistId));
+						ins.Parameters.AddWithValue("$ca", NullableParam(a.CoverArt));
+						ins.Parameters.AddWithValue("$y", a.Year);
+						ins.Parameters.AddWithValue("$sc", a.SongCount);
+						ins.Parameters.AddWithValue("$d", a.Duration);
+						ins.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
+			}
 		}
 
 		public List<PulseGenre> GetGenres()
@@ -821,7 +844,7 @@ namespace Thump.Data
 			List<PulseTrack> result = new List<PulseTrack>();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT t.id, t.title, t.artist, t.artist_id, t.album, t.album_id, t.cover_art, t.duration FROM genre_tracks gt JOIN tracks t ON t.id = gt.track_id WHERE gt.genre = $g ORDER BY gt.sort_order";
+				cmd.CommandText = "SELECT id, title, artist, artist_id, album, album_id, cover_art, duration FROM genre_tracks WHERE genre = $g ORDER BY position";
 				cmd.Parameters.AddWithValue("$g", genre);
 				using (SqliteDataReader reader = cmd.ExecuteReader())
 				{
@@ -835,7 +858,6 @@ namespace Thump.Data
 		}
 		public void UpdateTracksForGenre(string genre, List<PulseTrack> tracks)
 		{
-			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 			using (SqliteTransaction tx = m_connection.BeginTransaction())
 			{
 				using (SqliteCommand del = m_connection.CreateCommand())
@@ -847,16 +869,22 @@ namespace Thump.Data
 				}
 				for (int idx = 0; idx < tracks.Count; idx++)
 				{
-					PulseTrack song = tracks[idx];
-					WriteTrackRow(tx, song, now);
-					using (SqliteCommand gtIns = m_connection.CreateCommand())
+					PulseTrack t = tracks[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
 					{
-						gtIns.Transaction = tx;
-						gtIns.CommandText = "INSERT INTO genre_tracks (genre, track_id, sort_order) VALUES ($g, $tid, $o)";
-						gtIns.Parameters.AddWithValue("$g", genre);
-						gtIns.Parameters.AddWithValue("$tid", song.Id);
-						gtIns.Parameters.AddWithValue("$o", idx);
-						gtIns.ExecuteNonQuery();
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO genre_tracks (genre, position, id, title, artist, artist_id, album, album_id, cover_art, duration) VALUES ($g, $pos, $id, $t, $a, $aid, $alb, $albid, $ca, $d)";
+						ins.Parameters.AddWithValue("$g", genre);
+						ins.Parameters.AddWithValue("$pos", idx);
+						ins.Parameters.AddWithValue("$id", NullableParam(t.Id));
+						ins.Parameters.AddWithValue("$t", NullableParam(t.Title));
+						ins.Parameters.AddWithValue("$a", NullableParam(t.Artist));
+						ins.Parameters.AddWithValue("$aid", NullableParam(t.ArtistId));
+						ins.Parameters.AddWithValue("$alb", NullableParam(t.Album));
+						ins.Parameters.AddWithValue("$albid", NullableParam(t.AlbumId));
+						ins.Parameters.AddWithValue("$ca", NullableParam(t.ImageID));
+						ins.Parameters.AddWithValue("$d", t.Duration);
+						ins.ExecuteNonQuery();
 					}
 				}
 				tx.Commit();
@@ -868,17 +896,12 @@ namespace Thump.Data
 			List<PulseObject> result = new List<PulseObject>();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "recently_played");
+				cmd.CommandText = "SELECT id, title, artist, artist_id, album, album_id, cover_art, duration FROM recently_played ORDER BY position";
 				using (SqliteDataReader reader = cmd.ExecuteReader())
 				{
 					while (reader.Read())
 					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null)
-						{
-							result.Add(ob);
-						}
+						result.Add(ReadSongRow(reader));
 					}
 				}
 			}
@@ -886,7 +909,35 @@ namespace Thump.Data
 		}
 		public void UpdateRecentlyPlayed(List<PulseObject> tracks)
 		{
-			ReplaceHomeSection("recently_played", tracks);
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
+			{
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM recently_played";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < tracks.Count; idx++)
+				{
+					PulseTrack t = (PulseTrack)tracks[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
+					{
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO recently_played (position, id, title, artist, artist_id, album, album_id, cover_art, duration) VALUES ($pos, $id, $t, $a, $aid, $alb, $albid, $ca, $d)";
+						ins.Parameters.AddWithValue("$pos", idx);
+						ins.Parameters.AddWithValue("$id", NullableParam(t.Id));
+						ins.Parameters.AddWithValue("$t", NullableParam(t.Title));
+						ins.Parameters.AddWithValue("$a", NullableParam(t.Artist));
+						ins.Parameters.AddWithValue("$aid", NullableParam(t.ArtistId));
+						ins.Parameters.AddWithValue("$alb", NullableParam(t.Album));
+						ins.Parameters.AddWithValue("$albid", NullableParam(t.AlbumId));
+						ins.Parameters.AddWithValue("$ca", NullableParam(t.ImageID));
+						ins.Parameters.AddWithValue("$d", t.Duration);
+						ins.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
+			}
 		}
 
 		public List<PulsePlaylist> GetTopPlaylists()
@@ -894,17 +945,12 @@ namespace Thump.Data
 			List<PulsePlaylist> result = new List<PulsePlaylist>();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "top_playlists");
+				cmd.CommandText = "SELECT id, name, cover_art, song_count, duration, score, last_played FROM top_playlists ORDER BY position";
 				using (SqliteDataReader reader = cmd.ExecuteReader())
 				{
 					while (reader.Read())
 					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null && ob.Kind == eDataType.Playlist)
-						{
-							result.Add((PulsePlaylist)ob);
-						}
+						result.Add(ReadPlaylistRow(reader));
 					}
 				}
 			}
@@ -912,12 +958,34 @@ namespace Thump.Data
 		}
 		public void UpdateTopPlaylists(List<PulsePlaylist> playlists)
 		{
-			List<PulseObject> tmp = new List<PulseObject>();
-			for (int idx = 0; idx < playlists.Count; idx++)
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
 			{
-				tmp.Add(playlists[idx]);
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM top_playlists";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < playlists.Count; idx++)
+				{
+					PulsePlaylist p = playlists[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
+					{
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO top_playlists (position, id, name, cover_art, song_count, duration, score, last_played) VALUES ($pos, $id, $n, $ca, $sc, $d, $score, $lp)";
+						ins.Parameters.AddWithValue("$pos", idx);
+						ins.Parameters.AddWithValue("$id", NullableParam(p.Id));
+						ins.Parameters.AddWithValue("$n", NullableParam(p.Name));
+						ins.Parameters.AddWithValue("$ca", NullableParam(p.CoverArt));
+						ins.Parameters.AddWithValue("$sc", p.SongCount);
+						ins.Parameters.AddWithValue("$d", p.Duration);
+						ins.Parameters.AddWithValue("$score", p.Score);
+						ins.Parameters.AddWithValue("$lp", ToUnixSeconds(p.LastPlayed));
+						ins.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
 			}
-			ReplaceHomeSection("top_playlists", tmp);
 		}
 
 		public List<PulseArtist> GetPopularArtists()
@@ -925,17 +993,20 @@ namespace Thump.Data
 			List<PulseArtist> result = new List<PulseArtist>();
 			using (SqliteCommand cmd = m_connection.CreateCommand())
 			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "popular_artists");
+				cmd.CommandText = "SELECT id, name, cover_art, album_count, play_count, score, last_played FROM popular_artists ORDER BY position";
 				using (SqliteDataReader reader = cmd.ExecuteReader())
 				{
 					while (reader.Read())
 					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null && ob.Kind == eDataType.Artist)
-						{
-							result.Add((PulseArtist)ob);
-						}
+						PulseArtist artist = new PulseArtist();
+						artist.Id = reader.GetString(0);
+						artist.Name = reader.GetString(1);
+						artist.CoverArt = ReadNullableString(reader, 2);
+						artist.AlbumCount = reader.GetInt32(3);
+						artist.PlayCount = reader.GetInt32(4);
+						artist.Score = (float)reader.GetDouble(5);
+						artist.LastPlayed = FromUnixSeconds(reader.GetInt64(6));
+						result.Add(artist);
 					}
 				}
 			}
@@ -943,74 +1014,50 @@ namespace Thump.Data
 		}
 		public void UpdatePopularArtists(List<PulseArtist> artists)
 		{
-			List<PulseObject> tmp = new List<PulseObject>();
-			for (int idx = 0; idx < artists.Count; idx++)
+			using (SqliteTransaction tx = m_connection.BeginTransaction())
 			{
-				tmp.Add(artists[idx]);
+				using (SqliteCommand del = m_connection.CreateCommand())
+				{
+					del.Transaction = tx;
+					del.CommandText = "DELETE FROM popular_artists";
+					del.ExecuteNonQuery();
+				}
+				for (int idx = 0; idx < artists.Count; idx++)
+				{
+					PulseArtist ar = artists[idx];
+					using (SqliteCommand ins = m_connection.CreateCommand())
+					{
+						ins.Transaction = tx;
+						ins.CommandText = "INSERT INTO popular_artists (position, id, name, cover_art, album_count, play_count, score, last_played) VALUES ($pos, $id, $n, $ca, $ac, $pc, $score, $lp)";
+						ins.Parameters.AddWithValue("$pos", idx);
+						ins.Parameters.AddWithValue("$id", NullableParam(ar.Id));
+						ins.Parameters.AddWithValue("$n", NullableParam(ar.Name));
+						ins.Parameters.AddWithValue("$ca", NullableParam(ar.CoverArt));
+						ins.Parameters.AddWithValue("$ac", ar.AlbumCount);
+						ins.Parameters.AddWithValue("$pc", ar.PlayCount);
+						ins.Parameters.AddWithValue("$score", ar.Score);
+						ins.Parameters.AddWithValue("$lp", ToUnixSeconds(ar.LastPlayed));
+						ins.ExecuteNonQuery();
+					}
+				}
+				tx.Commit();
 			}
-			ReplaceHomeSection("popular_artists", tmp);
 		}
 
 		public List<PulseTrack> GetStarred()
 		{
-			List<PulseTrack> result = new List<PulseTrack>();
-			using (SqliteCommand cmd = m_connection.CreateCommand())
-			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "starred");
-				using (SqliteDataReader reader = cmd.ExecuteReader())
-				{
-					while (reader.Read())
-					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null && ob.Kind == eDataType.Track)
-						{
-							result.Add((PulseTrack)ob);
-						}
-					}
-				}
-			}
-			return result;
+			return new List<PulseTrack>();
 		}
 		public void UpdateStarred(List<PulseTrack> tracks)
 		{
-			List<PulseObject> tmp = new List<PulseObject>();
-			for (int idx = 0; idx < tracks.Count; idx++)
-			{
-				tmp.Add(tracks[idx]);
-			}
-			ReplaceHomeSection("starred", tmp);
 		}
 
 		public List<PulseTrack> GetFavorites()
 		{
-			List<PulseTrack> result = new List<PulseTrack>();
-			using (SqliteCommand cmd = m_connection.CreateCommand())
-			{
-				cmd.CommandText = "SELECT item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played FROM home_sections WHERE section_key = $key ORDER BY position";
-				cmd.Parameters.AddWithValue("$key", "favorites");
-				using (SqliteDataReader reader = cmd.ExecuteReader())
-				{
-					while (reader.Read())
-					{
-						PulseObject ob = ReadHomeSectionObject(reader);
-						if (ob != null && ob.Kind == eDataType.Track)
-						{
-							result.Add((PulseTrack)ob);
-						}
-					}
-				}
-			}
-			return result;
+			return new List<PulseTrack>();
 		}
 		public void UpdateFavorites(List<PulseTrack> songs)
 		{
-			List<PulseObject> tmp = new List<PulseObject>();
-			for (int idx = 0; idx < songs.Count; idx++)
-			{
-				tmp.Add(songs[idx]);
-			}
-			ReplaceHomeSection("favorites", tmp);
 		}
 		private static PulseAlbum ReadAlbumRow(SqliteDataReader reader)
 		{
@@ -1106,192 +1153,6 @@ namespace Thump.Data
 				cmd.Parameters.AddWithValue("$lp", ToUnixSeconds(playlist.LastPlayed));
 				cmd.Parameters.AddWithValue("$f", now);
 				cmd.ExecuteNonQuery();
-			}
-		}
-
-		private void WriteHomeSectionRow(SqliteTransaction tx, string sectionKey, int position, PulseObject item, long now)
-		{
-			string itemType = "";
-			object itemId = NullableParam(null);
-			object name = NullableParam(null);
-			object title = NullableParam(null);
-			object artist = NullableParam(null);
-			object artistId = NullableParam(null);
-			object album = NullableParam(null);
-			object albumId = NullableParam(null);
-			object coverArt = NullableParam(null);
-			int year = 0;
-			int songCount = 0;
-			int albumCount = 0;
-			int playCount = 0;
-			int duration = 0;
-			float score = 0;
-			long lastPlayed = 0;
-
-			switch (item.Kind)
-			{
-				case eDataType.Album:
-				{
-					PulseAlbum a = (PulseAlbum)item;
-					itemType = "album";
-					itemId = NullableParam(a.Id);
-					name = NullableParam(a.Name);
-					artist = NullableParam(a.Artist);
-					artistId = NullableParam(a.ArtistId);
-					coverArt = NullableParam(a.CoverArt);
-					year = a.Year;
-					songCount = a.SongCount;
-					duration = a.Duration;
-					break;
-				}
-				case eDataType.Track:
-				{
-					PulseTrack t = (PulseTrack)item;
-					itemType = "track";
-					itemId = NullableParam(t.Id);
-					title = NullableParam(t.Title);
-					artist = NullableParam(t.Artist);
-					artistId = NullableParam(t.ArtistId);
-					album = NullableParam(t.Album);
-					albumId = NullableParam(t.AlbumId);
-					coverArt = NullableParam(t.ImageID);
-					duration = t.Duration;
-					break;
-				}
-				case eDataType.Playlist:
-				{
-					PulsePlaylist p = (PulsePlaylist)item;
-					itemType = "playlist";
-					itemId = NullableParam(p.Id);
-					name = NullableParam(p.Name);
-					coverArt = NullableParam(p.CoverArt);
-					songCount = p.SongCount;
-					duration = p.Duration;
-					score = p.Score;
-					lastPlayed = ToUnixSeconds(p.LastPlayed);
-					break;
-				}
-				case eDataType.Artist:
-				{
-					PulseArtist ar = (PulseArtist)item;
-					itemType = "artist";
-					itemId = NullableParam(ar.Id);
-					name = NullableParam(ar.Name);
-					coverArt = NullableParam(ar.CoverArt);
-					albumCount = ar.AlbumCount;
-					playCount = ar.PlayCount;
-					score = ar.Score;
-					lastPlayed = ToUnixSeconds(ar.LastPlayed);
-					break;
-				}
-			}
-
-			using (SqliteCommand cmd = m_connection.CreateCommand())
-			{
-				cmd.Transaction = tx;
-				cmd.CommandText = "INSERT INTO home_sections (section_key, position, item_type, item_id, name, title, artist, artist_id, album, album_id, cover_art, year, song_count, album_count, play_count, duration, score, last_played, fetched_at) VALUES ($key, $pos, $it, $iid, $name, $title, $artist, $aid, $album, $albid, $ca, $y, $sc, $ac, $pc, $d, $score, $lp, $f)";
-				cmd.Parameters.AddWithValue("$key", sectionKey);
-				cmd.Parameters.AddWithValue("$pos", position);
-				cmd.Parameters.AddWithValue("$it", itemType);
-				cmd.Parameters.AddWithValue("$iid", itemId);
-				cmd.Parameters.AddWithValue("$name", name);
-				cmd.Parameters.AddWithValue("$title", title);
-				cmd.Parameters.AddWithValue("$artist", artist);
-				cmd.Parameters.AddWithValue("$aid", artistId);
-				cmd.Parameters.AddWithValue("$album", album);
-				cmd.Parameters.AddWithValue("$albid", albumId);
-				cmd.Parameters.AddWithValue("$ca", coverArt);
-				cmd.Parameters.AddWithValue("$y", year);
-				cmd.Parameters.AddWithValue("$sc", songCount);
-				cmd.Parameters.AddWithValue("$ac", albumCount);
-				cmd.Parameters.AddWithValue("$pc", playCount);
-				cmd.Parameters.AddWithValue("$d", duration);
-				cmd.Parameters.AddWithValue("$score", score);
-				cmd.Parameters.AddWithValue("$lp", lastPlayed);
-				cmd.Parameters.AddWithValue("$f", now);
-				cmd.ExecuteNonQuery();
-			}
-		}
-
-		private PulseObject ReadHomeSectionObject(SqliteDataReader reader)
-		{
-			string itemType = reader.GetString(0);
-			switch (itemType)
-			{
-				case "album":
-				{
-					PulseAlbum a = new PulseAlbum();
-					a.Id = ReadNullableString(reader, 1);
-					a.Name = ReadNullableString(reader, 2);
-					a.Artist = ReadNullableString(reader, 4);
-					a.ArtistId = ReadNullableString(reader, 5);
-					a.CoverArt = ReadNullableString(reader, 8);
-					a.Year = reader.GetInt32(9);
-					a.SongCount = reader.GetInt32(10);
-					a.Duration = reader.GetInt32(13);
-					return a;
-				}
-				case "track":
-				{
-					PulseTrack t = new PulseTrack();
-					t.Id = ReadNullableString(reader, 1);
-					t.Title = ReadNullableString(reader, 3);
-					t.Artist = ReadNullableString(reader, 4);
-					t.ArtistId = ReadNullableString(reader, 5);
-					t.Album = ReadNullableString(reader, 6);
-					t.AlbumId = ReadNullableString(reader, 7);
-					t.CoverArt = ReadNullableString(reader, 8);
-					t.Duration = reader.GetInt32(13);
-					return t;
-				}
-				case "playlist":
-				{
-					PulsePlaylist p = new PulsePlaylist();
-					p.Id = ReadNullableString(reader, 1);
-					p.Name = ReadNullableString(reader, 2);
-					p.CoverArt = ReadNullableString(reader, 8);
-					p.SongCount = reader.GetInt32(10);
-					p.Duration = reader.GetInt32(13);
-					p.Score = (float)reader.GetDouble(14);
-					p.LastPlayed = FromUnixSeconds(reader.GetInt64(15));
-					return p;
-				}
-				case "artist":
-				{
-					PulseArtist ar = new PulseArtist();
-					ar.Id = ReadNullableString(reader, 1);
-					ar.Name = ReadNullableString(reader, 2);
-					ar.CoverArt = ReadNullableString(reader, 8);
-					ar.AlbumCount = reader.GetInt32(11);
-					ar.PlayCount = reader.GetInt32(12);
-					ar.Score = (float)reader.GetDouble(14);
-					ar.LastPlayed = FromUnixSeconds(reader.GetInt64(15));
-					return ar;
-				}
-				default:
-				{
-					return null;
-				}
-			}
-		}
-
-		private void ReplaceHomeSection(string sectionKey, List<PulseObject> items)
-		{
-			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-			using (SqliteTransaction tx = m_connection.BeginTransaction())
-			{
-				using (SqliteCommand del = m_connection.CreateCommand())
-				{
-					del.Transaction = tx;
-					del.CommandText = "DELETE FROM home_sections WHERE section_key = $key";
-					del.Parameters.AddWithValue("$key", sectionKey);
-					del.ExecuteNonQuery();
-				}
-				for (int idx = 0; idx < items.Count; idx++)
-				{
-					WriteHomeSectionRow(tx, sectionKey, idx, items[idx], now);
-				}
-				tx.Commit();
 			}
 		}
 	}

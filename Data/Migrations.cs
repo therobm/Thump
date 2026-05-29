@@ -182,34 +182,64 @@ namespace Thump.Data
 		";
 
 		private const string MIGRATION_V2 = @"
-			CREATE TABLE genre_tracks (
-				genre TEXT NOT NULL,
-				track_id TEXT NOT NULL,
-				sort_order INTEGER NOT NULL,
-				PRIMARY KEY (genre, sort_order)
+			CREATE TABLE recently_added (
+				position INTEGER PRIMARY KEY,
+				id TEXT,
+				name TEXT,
+				artist TEXT,
+				artist_id TEXT,
+				cover_art TEXT,
+				year INTEGER NOT NULL DEFAULT 0,
+				song_count INTEGER NOT NULL DEFAULT 0,
+				duration INTEGER NOT NULL DEFAULT 0
 			);
 
-			CREATE TABLE home_sections (
-				section_key TEXT NOT NULL,
-				position INTEGER NOT NULL,
-				item_type TEXT NOT NULL,
-				item_id TEXT,
-				name TEXT,
+			CREATE TABLE recently_played (
+				position INTEGER PRIMARY KEY,
+				id TEXT,
 				title TEXT,
 				artist TEXT,
 				artist_id TEXT,
 				album TEXT,
 				album_id TEXT,
 				cover_art TEXT,
-				year INTEGER NOT NULL DEFAULT 0,
-				song_count INTEGER NOT NULL DEFAULT 0,
+				duration INTEGER NOT NULL DEFAULT 0
+			);
+
+			CREATE TABLE popular_artists (
+				position INTEGER PRIMARY KEY,
+				id TEXT,
+				name TEXT,
+				cover_art TEXT,
 				album_count INTEGER NOT NULL DEFAULT 0,
 				play_count INTEGER NOT NULL DEFAULT 0,
+				score REAL NOT NULL DEFAULT 0,
+				last_played INTEGER NOT NULL DEFAULT 0
+			);
+
+			CREATE TABLE top_playlists (
+				position INTEGER PRIMARY KEY,
+				id TEXT,
+				name TEXT,
+				cover_art TEXT,
+				song_count INTEGER NOT NULL DEFAULT 0,
 				duration INTEGER NOT NULL DEFAULT 0,
 				score REAL NOT NULL DEFAULT 0,
-				last_played INTEGER NOT NULL DEFAULT 0,
-				fetched_at INTEGER NOT NULL,
-				PRIMARY KEY (section_key, position)
+				last_played INTEGER NOT NULL DEFAULT 0
+			);
+
+			CREATE TABLE genre_tracks (
+				genre TEXT NOT NULL,
+				position INTEGER NOT NULL,
+				id TEXT,
+				title TEXT,
+				artist TEXT,
+				artist_id TEXT,
+				album TEXT,
+				album_id TEXT,
+				cover_art TEXT,
+				duration INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (genre, position)
 			);
 		";
 	}
