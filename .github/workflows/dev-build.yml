@@ -7,6 +7,10 @@ name: Dev Build
 
 on:
   workflow_dispatch:
+  # TEMP: validate the Android pipeline on this branch before merge; removed before PR.
+  push:
+    branches:
+      - add-android-ci
 
 permissions:
   contents: read
