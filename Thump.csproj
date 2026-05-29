@@ -31,10 +31,10 @@
 		<ApplicationTitle>Thump</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.thump</ApplicationId>
+		<ApplicationId>com.therobm.thump</ApplicationId>
 
-		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<!-- Versions (CI overrides via -p:ApplicationDisplayVersion / -p:ApplicationVersion) -->
+		<ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->

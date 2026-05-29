@@ -11,7 +11,7 @@ using Thump.Pulse;
 
 namespace Thump.Playback
 {
-	[Service(Exported = true, Enabled = true, Name = "com.companyname.thump.ThumpPlaybackService", ForegroundServiceType = ForegroundService.TypeMediaPlayback)]
+	[Service(Exported = true, Enabled = true, Name = "com.therobm.thump.ThumpPlaybackService", ForegroundServiceType = ForegroundService.TypeMediaPlayback)]
 	[IntentFilter(new string[] { "androidx.media3.session.MediaLibraryService", "android.media.browse.MediaBrowserService" })]
 	public class ThumpPlaybackService : MediaLibraryService
 	{
