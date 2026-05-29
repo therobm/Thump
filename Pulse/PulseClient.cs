@@ -179,6 +179,8 @@ namespace Thump.Pulse
 		/// </summary>
 		private ConcurrentDictionary<string, byte[]> m_imageCache = new ConcurrentDictionary<string, byte[]>();
 
+		private object m_httpClientLock = new object();
+
 		public PulseClient()
 		{
 			m_thread = new Thread(ConnectionLoop);
@@ -220,8 +222,18 @@ namespace Thump.Pulse
 
 			HttpClientHandler handler = new HttpClientHandler();
 			handler.ServerCertificateCustomValidationCallback = AcceptAnyServerCertificate;
-			m_httpClient = new HttpClient(handler);
-			m_httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+			HttpClient oldClient;
+			lock(m_httpClientLock)
+			{
+				oldClient = m_httpClient;
+				m_httpClient = new HttpClient(handler);
+				m_httpClient.Timeout = TimeSpan.FromSeconds(10);
+			}
+			if (oldClient != null)
+			{
+				oldClient.Dispose();
+			}
 
 			m_bInitialized = true;
 			Ping(out JsonElement discard);
@@ -1069,16 +1081,16 @@ namespace Thump.Pulse
 					if (!response.IsSuccessStatusCode)
 					{
 						Log.Error("Audio fetch failed: " + url + " status: " + response.StatusCode);
-						MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+						onComplete(null);
 						return;
 					}
 					byte[] data = response.Content.ReadAsByteArrayAsync().Result;
-					MainThread.BeginInvokeOnMainThread(() => { onComplete(data); });
+					onComplete(data);
 				}
 				catch (Exception ex)
 				{
 					Log.Exception(ex);
-					MainThread.BeginInvokeOnMainThread(() => { onComplete(null); });
+					onComplete(null);
 				}
 			});
 		}
@@ -1088,7 +1100,18 @@ namespace Thump.Pulse
 			bool retVal = false;
 			jsonElement = default;
 			string url = BuildRestUrl(endpoint, extraParams);
-			HttpResponseMessage httpResponse = m_httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Get, url)).Result;
+
+			HttpClient client;
+			lock (m_httpClientLock)
+			{
+				client = m_httpClient;
+			}
+			if (client == null)
+			{
+				jsonElement = default;
+				return false;
+			}
+			HttpResponseMessage httpResponse = client.SendAsync(new HttpRequestMessage(HttpMethod.Get, url)).Result;
 			if (!httpResponse.IsSuccessStatusCode)
 			{
 				Log.Error("Subsonic request failed: " + url + " status: " + httpResponse.StatusCode);

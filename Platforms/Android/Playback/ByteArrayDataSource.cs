@@ -33,15 +33,8 @@ namespace Thump.Playback
 			track.Id = trackId;
 
 			ManualResetEventSlim wait = new ManualResetEventSlim(false);
-			byte[] fetched = null;
-			m_data.GetTrackAudioData(track, (audioData) =>
-			{
-				fetched = audioData;
-				wait.Set();
-			});
-			wait.Wait();
-
-			m_bytes = fetched;
+		
+			m_bytes = m_data.GetTrackAudioData(track);
 			if (m_bytes == null)
 			{
 				throw new Java.IO.IOException("No audio data for " + trackId);

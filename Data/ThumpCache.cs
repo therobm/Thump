@@ -64,7 +64,7 @@ namespace Thump.Data
 			}
 		}
 
-		public void Execute(Action work)
+		public void ExecuteSync(Action work)
 		{
 			lock (m_sqlLock)
 			{

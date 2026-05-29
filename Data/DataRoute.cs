@@ -24,7 +24,7 @@ namespace Thump.Data
 
 		protected void QueryDB(Action dataFunction)
 		{
-			m_dataProvider.Cache.Execute(dataFunction);
+			m_dataProvider.Cache.ExecuteSync(dataFunction);
 		}
 		protected bool IsOnline()
 		{
@@ -157,7 +157,7 @@ namespace Thump.Data
 		{
 			if (!m_dataProvider.Pulse.IsOnline())
 			{
-				m_dataProvider.Cache.Execute(() =>
+				m_dataProvider.Cache.ExecuteSync(() =>
 				{
 					T cached = null;
 					if (s_bCacheEnabled)

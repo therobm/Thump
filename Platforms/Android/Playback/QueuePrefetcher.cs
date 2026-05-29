@@ -53,7 +53,7 @@ namespace Thump.Playback
 
 			int generation = m_generation;
 			PulseTrack startTrack = tracks[startIndex];
-			m_data.IsTrackAvailable(startTrack, (isAvailable) =>
+			m_data.EnsureTrackAvailability(startTrack, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
@@ -121,7 +121,7 @@ namespace Thump.Playback
 			m_fetching = true;
 			int generation = m_generation;
 			PulseTrack next = m_tracks[m_addedThrough + 1];
-			m_data.IsTrackAvailable(next, (isAvailable) =>
+			m_data.EnsureTrackAvailability(next, (isAvailable) =>
 			{
 				MainThread.BeginInvokeOnMainThread(() =>
 				{
@@ -130,7 +130,7 @@ namespace Thump.Playback
 						m_fetching = false;
 						return;
 					}
-					if (!isAvailable)
+					if (isAvailable)
 					{
 						m_player.AddMediaItem(MediaItemBuilder.Build(next));
 					}

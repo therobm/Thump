@@ -107,7 +107,7 @@ namespace Thump.Playback
 			m_controller.ClearMediaItems();
 
 			PulseTrack startTrack = m_queue[m_startIndex];
-			m_data.IsTrackAvailable(startTrack, (isAvailable) =>
+			m_data.EnsureTrackAvailability(startTrack, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
@@ -140,7 +140,7 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = m_queue[index];
-			m_data.IsTrackAvailable(track, (isAvailable) =>
+			m_data.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
@@ -161,7 +161,7 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = m_queue[index];
-			m_data.IsTrackAvailable(track, (isAvailable) =>
+			m_data.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
@@ -286,7 +286,7 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = tracks[index];
-			m_data.IsTrackAvailable(track, (isAvailable) =>
+			m_data.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
@@ -324,7 +324,7 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = tracks[index];
-			m_data.IsTrackAvailable(track, (isAvailable) =>
+			m_data.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{

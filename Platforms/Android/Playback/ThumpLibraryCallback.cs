@@ -466,10 +466,10 @@ namespace Thump.Playback
 			}
 			PulseTrack track = new PulseTrack();
 			track.Id = trackId;
-			m_serviceData.IsTrackAvailable(track, (isAvailable) =>
+			m_serviceData.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				MediaItem resolvedItem = item;
-				if (!isAvailable)
+				if (isAvailable)
 				{
 					Android.Net.Uri uri = MediaItemBuilder.GetURI(track);
 					resolvedItem = item.BuildUpon().SetUri(uri).Build();
@@ -503,7 +503,7 @@ namespace Thump.Playback
 			}
 			PulseTrack track = new PulseTrack();
 			track.Id = trackId;
-			m_serviceData.IsTrackAvailable(track, (isAvailable) =>
+			m_serviceData.EnsureTrackAvailability(track, (isAvailable) =>
 			{
 				MediaItem resolvedItem = item;
 				if (!isAvailable)
