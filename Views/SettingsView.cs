@@ -203,6 +203,17 @@ namespace Thump.Views
 			m_oldestLabel = BuildFieldLabel("Oldest Cached Object: —");
 			section.Children.Add(m_oldestLabel);
 
+			Button refreshButton = new Button();
+			refreshButton.Text = "Refresh";
+			refreshButton.TextColor = ThumpColors.OnBackground;
+			refreshButton.BackgroundColor = ThumpColors.Surface;
+			refreshButton.CornerRadius = 8;
+			refreshButton.FontSize = 15;
+			refreshButton.HeightRequest = 44;
+			refreshButton.Margin = new Thickness(0, 4, 0, 0);
+			refreshButton.Clicked += OnRefreshCacheClicked;
+			section.Children.Add(refreshButton);
+
 			Button clearButton = new Button();
 			clearButton.Text = "Clear Cache";
 			clearButton.TextColor = ThumpColors.OnBackground;
@@ -321,6 +332,11 @@ namespace Thump.Views
 			RefreshCacheStats();
 		}
 
+		public void OnNavigatedTo()
+		{
+			RefreshCacheStats();
+		}
+
 		private void OnScrobbleToggled(object sender, ToggledEventArgs e)
 		{
 			ThumpSettings.SetScrobbleEnabled(e.Value);
@@ -399,6 +415,11 @@ namespace Thump.Views
 			m_cacheSizeValueLabel.Text = "Cache Size: " + FormatBytes(bytes);
 			ThumpSettings.SetCacheLimitBytes(bytes);
 			MainView.Self.GetCache().SetSizeLimitBytes(bytes);
+		}
+
+		private void OnRefreshCacheClicked(object sender, EventArgs e)
+		{
+			RefreshCacheStats();
 		}
 
 		private void OnClearCacheClicked(object sender, EventArgs e)

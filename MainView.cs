@@ -159,6 +159,7 @@ namespace Thump
 			m_activeTab = eTab.Settings;
 			m_detailStack.Clear();
 			m_contentHost.Content = m_settingsView;
+			m_settingsView.OnNavigatedTo();
 			m_navFooter.SetActiveTab(eTab.Settings);
 			RestoreMiniPlayerIfActive();
 		}

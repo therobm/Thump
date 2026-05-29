@@ -219,21 +219,20 @@ namespace Thump.Data
 				}
 				stats.BytesUsed = (pageCount * pageSize) + blobBytes;
 
-				using (SqliteCommand cmd = m_connection.CreateCommand())
-				{
-					cmd.CommandText = "SELECT COUNT(*) FROM tracks";
-					stats.TrackCount = Convert.ToInt32(cmd.ExecuteScalar());
-				}
-				using (SqliteCommand cmd = m_connection.CreateCommand())
-				{
-					cmd.CommandText = "SELECT COUNT(*) FROM blobs WHERE content_type LIKE 'image/%'";
-					stats.CoverArtCount = Convert.ToInt32(cmd.ExecuteScalar());
-				}
-				using (SqliteCommand cmd = m_connection.CreateCommand())
-				{
-					cmd.CommandText = "SELECT COALESCE(MIN(fetched_at), 0) FROM (SELECT fetched_at FROM tracks WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM albums WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM artists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM playlists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM blobs WHERE fetched_at > 0)";
-					stats.OldestFetchedUnix = Convert.ToInt64(cmd.ExecuteScalar());
-				}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COUNT(*) FROM blobs WHERE content_type = 'audio'";
+				stats.TrackCount = Convert.ToInt32(cmd.ExecuteScalar());
+			}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COUNT(*) FROM blobs WHERE content_type LIKE 'image/%'";
+				stats.CoverArtCount = Convert.ToInt32(cmd.ExecuteScalar());
+			}
+			using (SqliteCommand cmd = m_connection.CreateCommand())
+			{
+				cmd.CommandText = "SELECT COALESCE(MIN(fetched_at), 0) FROM (SELECT fetched_at FROM tracks WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM albums WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM artists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM playlists WHERE fetched_at > 0 UNION ALL SELECT fetched_at FROM blobs WHERE fetched_at > 0)";
+				stats.OldestFetchedUnix = Convert.ToInt64(cmd.ExecuteScalar());
 			}
 			return stats;
 		}
