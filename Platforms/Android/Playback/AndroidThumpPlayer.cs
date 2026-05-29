@@ -107,19 +107,19 @@ namespace Thump.Playback
 			m_controller.ClearMediaItems();
 
 			PulseTrack startTrack = m_queue[m_startIndex];
-			m_data.GetTrackAudioFile(startTrack, (localPath) =>
+			m_data.IsTrackAvailable(startTrack, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (string.IsNullOrEmpty(localPath))
+				if (!isAvailable)
 				{
 					Log.Error("AndroidThumpPlayer: failed to obtain audio file for start track.");
 					ReportState(ePlaybackState.Idle);
 					return;
 				}
-				MediaItem item = BuildMediaItem(startTrack, localPath);
+				MediaItem item = MediaItemBuilder.Build(startTrack);
 				m_controller.SetMediaItem(item);
 				m_controller.Prepare();
 				m_controller.Play();
@@ -140,15 +140,15 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = m_queue[index];
-			m_data.GetTrackAudioFile(track, (localPath) =>
+			m_data.IsTrackAvailable(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (!string.IsNullOrEmpty(localPath))
+				if (isAvailable)
 				{
-					m_controller.AddMediaItem(BuildMediaItem(track, localPath));
+					m_controller.AddMediaItem(MediaItemBuilder.Build(track));
 				}
 				FillForward(index + 1, generation);
 			});
@@ -161,37 +161,21 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = m_queue[index];
-			m_data.GetTrackAudioFile(track, (localPath) =>
+			m_data.IsTrackAvailable(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (!string.IsNullOrEmpty(localPath))
+				if (isAvailable)
 				{
-					m_controller.AddMediaItem(0, BuildMediaItem(track, localPath));
+					m_controller.AddMediaItem(0, MediaItemBuilder.Build(track));
 				}
 				FillBackward(index - 1, generation);
 			});
 		}
 
-		private static MediaItem BuildMediaItem(PulseTrack track, string localPath)
-		{
-			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
-			metadata.SetTitle(track.Title);
-			metadata.SetArtist(track.Artist);
-			if (!string.IsNullOrEmpty(track.Album))
-			{
-				metadata.SetAlbumTitle(track.Album);
-			}
-
-			Android.Net.Uri uri = Android.Net.Uri.FromFile(new Java.IO.File(localPath));
-			MediaItem.Builder builder = new MediaItem.Builder();
-			builder.SetMediaId(track.Id);
-			builder.SetUri(uri);
-			builder.SetMediaMetadata(metadata.Build());
-			return builder.Build();
-		}
+	
 
 		public void Pause()
 		{
@@ -302,15 +286,15 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = tracks[index];
-			m_data.GetTrackAudioFile(track, (localPath) =>
+			m_data.IsTrackAvailable(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (!string.IsNullOrEmpty(localPath))
+				if (isAvailable)
 				{
-					m_controller.AddMediaItem(BuildMediaItem(track, localPath));
+					m_controller.AddMediaItem(MediaItemBuilder.Build(track));
 				}
 				AppendQueueItem(tracks, index + 1, generation);
 			});
@@ -340,15 +324,15 @@ namespace Thump.Playback
 				return;
 			}
 			PulseTrack track = tracks[index];
-			m_data.GetTrackAudioFile(track, (localPath) =>
+			m_data.IsTrackAvailable(track, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (!string.IsNullOrEmpty(localPath))
+				if (isAvailable)
 				{
-					m_controller.AddMediaItem(insertAt, BuildMediaItem(track, localPath));
+					m_controller.AddMediaItem(insertAt, MediaItemBuilder.Build(track));
 				}
 				InsertQueueItem(tracks, index + 1, insertAt + 1, generation);
 			});

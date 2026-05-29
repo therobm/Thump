@@ -289,7 +289,7 @@ namespace Thump.Data
 			}
 		}
 
-		public void GetTrackAudioFile(PulseTrack track, Action<string> callback)
+		public void GetTrackAudioData(PulseTrack track, Action<byte[]> callback)
 		{
 			if (callback == null)
 			{
@@ -303,24 +303,63 @@ namespace Thump.Data
 			string blobKey = "track:" + track.Id;
 			m_cache.Execute(() =>
 			{
-				string existingPath = m_cache.GetBlobFilePath(blobKey);
-				if (!string.IsNullOrEmpty(existingPath))
+				byte[] data = m_cache.ReadBlob(blobKey);
+				if (data != null && data.Length > 0)
 				{
-					MainThread.BeginInvokeOnMainThread(() => { callback(existingPath); });
+					//MainThread.BeginInvokeOnMainThread(() => { callback(data); });
+					callback(data); //return on thread we were called from
 					return;
 				}
 				m_pulseClient.GetTrackAudio(track.Id, (data) =>
 				{
 					if (data == null || data.Length == 0)
 					{
-						MainThread.BeginInvokeOnMainThread(() => { callback(null); });
+						//MainThread.BeginInvokeOnMainThread(() => { callback(null); });
+						callback(null); //return on thread we were called from
+						return;
+					}
+					m_cache.Execute(() =>
+					{
+						m_cache.WriteBlob(blobKey, data, "audio");
+						//MainThread.BeginInvokeOnMainThread(() => { callback(data); });
+						callback(data); //return on thread we were called from
+					});
+				});
+			});
+		}
+
+		public void IsTrackAvailable(PulseTrack track, Action<bool> callback)
+		{
+			if (callback == null)
+			{
+				return;
+			}
+			if (track == null || string.IsNullOrEmpty(track.Id))
+			{
+				callback(false);
+				return;
+			}
+			string blobKey = "track:" + track.Id;
+			m_cache.Execute(() =>
+			{
+				string existingPath = m_cache.GetBlobFilePath(blobKey);
+				if (!string.IsNullOrEmpty(existingPath))
+				{
+					MainThread.BeginInvokeOnMainThread(() => { callback(true); });
+					return;
+				}
+				m_pulseClient.GetTrackAudio(track.Id, (data) =>
+				{
+					if (data == null || data.Length == 0)
+					{
+						MainThread.BeginInvokeOnMainThread(() => { callback(false); });
 						return;
 					}
 					m_cache.Execute(() =>
 					{
 						m_cache.WriteBlob(blobKey, data, "audio");
 						string storedPath = m_cache.GetBlobFilePath(blobKey);
-						MainThread.BeginInvokeOnMainThread(() => { callback(storedPath); });
+						MainThread.BeginInvokeOnMainThread(() => { callback(true); });
 					});
 				});
 			});

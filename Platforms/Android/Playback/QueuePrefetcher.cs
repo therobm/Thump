@@ -53,13 +53,13 @@ namespace Thump.Playback
 
 			int generation = m_generation;
 			PulseTrack startTrack = tracks[startIndex];
-			m_data.GetTrackAudioFile(startTrack, (localPath) =>
+			m_data.IsTrackAvailable(startTrack, (isAvailable) =>
 			{
 				if (generation != m_generation)
 				{
 					return;
 				}
-				if (string.IsNullOrEmpty(localPath))
+				if (!isAvailable)
 				{
 					if (onStartResolved != null)
 					{
@@ -67,7 +67,7 @@ namespace Thump.Playback
 					}
 					return;
 				}
-				MediaItem item = BuildItem(startTrack, localPath);
+				MediaItem item = MediaItemBuilder.Build(startTrack);
 				if (onStartResolved != null)
 				{
 					onStartResolved(item);
@@ -121,7 +121,7 @@ namespace Thump.Playback
 			m_fetching = true;
 			int generation = m_generation;
 			PulseTrack next = m_tracks[m_addedThrough + 1];
-			m_data.GetTrackAudioFile(next, (localPath) =>
+			m_data.IsTrackAvailable(next, (isAvailable) =>
 			{
 				MainThread.BeginInvokeOnMainThread(() =>
 				{
@@ -130,9 +130,9 @@ namespace Thump.Playback
 						m_fetching = false;
 						return;
 					}
-					if (!string.IsNullOrEmpty(localPath))
+					if (!isAvailable)
 					{
-						m_player.AddMediaItem(BuildItem(next, localPath));
+						m_player.AddMediaItem(MediaItemBuilder.Build(next));
 					}
 					m_addedThrough = m_addedThrough + 1;
 					m_fetching = false;
@@ -140,22 +140,6 @@ namespace Thump.Playback
 			});
 		}
 
-		private static MediaItem BuildItem(PulseTrack track, string localPath)
-		{
-			MediaMetadata.Builder metadata = new MediaMetadata.Builder();
-			metadata.SetTitle(track.Title);
-			metadata.SetArtist(track.Artist);
-			if (!string.IsNullOrEmpty(track.Album))
-			{
-				metadata.SetAlbumTitle(track.Album);
-			}
 
-			Android.Net.Uri uri = Android.Net.Uri.FromFile(new Java.IO.File(localPath));
-			MediaItem.Builder builder = new MediaItem.Builder();
-			builder.SetMediaId(track.Id);
-			builder.SetUri(uri);
-			builder.SetMediaMetadata(metadata.Build());
-			return builder.Build();
-		}
 	}
 }

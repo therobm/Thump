@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
 using Thump.Data;
@@ -170,7 +171,8 @@ namespace Thump.Pulse
 		private string m_user;
 		private string m_apiParams;
 		private eSubSonicAuthType m_authType;
-
+		private Thread m_thread;
+		private bool m_bInitialized = false;
 		private bool m_bIsOnline = false;
 		/// <summary>
 		/// todo this seems dumb now that we have a real cache
@@ -179,6 +181,21 @@ namespace Thump.Pulse
 
 		public PulseClient()
 		{
+			m_thread = new Thread(ConnectionLoop);
+			m_thread.IsBackground = true;
+			m_thread.Start();
+		}
+
+		private void ConnectionLoop()
+		{
+			while (true)
+			{
+				if (m_bInitialized)
+				{
+					Ping(out JsonElement response);
+				}
+				Thread.Sleep(5000);
+			}
 		}
 
 		public void SetServerParams(string ip, string port, string username, string password, eSubSonicAuthType authType, bool enableSSL)
@@ -205,10 +222,16 @@ namespace Thump.Pulse
 			handler.ServerCertificateCustomValidationCallback = AcceptAnyServerCertificate;
 			m_httpClient = new HttpClient(handler);
 			m_httpClient.Timeout = TimeSpan.FromSeconds(10);
-			TestConnection(out JsonElement discard);
+
+			m_bInitialized = true;
+			Ping(out JsonElement discard);
 		}
 
 		public bool TestConnection(out JsonElement response)
+		{
+			return Ping(out response);
+		}
+		private bool Ping(out JsonElement response)
 		{
 			try
 			{
@@ -220,7 +243,8 @@ namespace Thump.Pulse
 			}
 			catch (Exception ex)
 			{
-				Log.Exception(ex);
+				//Don't log ping failures, this is our online/offline state polling
+				//Log.Exception(ex);
 			}
 			m_bIsOnline = false;
 			response = default;
@@ -265,14 +289,26 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getArtists", out JsonElement response))
 					{
-						if (response.TryGetProperty("artists", out JsonElement artists) &&
-							artists.TryGetProperty("index", out JsonElement indexes) &&
-							indexes.ValueKind == JsonValueKind.Array)
+						JsonElement artists;
+						JsonElement indexes;
+						bool validParams = true;
+						if (!response.TryGetProperty("artists", out artists))
+							validParams = false;
+						if (!artists.TryGetProperty("index", out indexes))
+							validParams = false;
+						if (indexes.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement index in indexes.EnumerateArray())
 							{
-								if (index.TryGetProperty("artist", out JsonElement artistArray) &&
-									artistArray.ValueKind == JsonValueKind.Array)
+								JsonElement artistArray;
+								bool validArtist = true;
+								if (!index.TryGetProperty("artist", out artistArray))
+									validArtist = false;
+								if (artistArray.ValueKind != JsonValueKind.Array)
+									validArtist = false;
+								if (validArtist)
 								{
 									foreach (JsonElement artistElement in artistArray.EnumerateArray())
 									{
@@ -311,9 +347,16 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getPodcasts", out JsonElement response, "includeEpisodes=true"))
 					{
-						if (response.TryGetProperty("podcasts", out JsonElement podcasts) &&
-							podcasts.TryGetProperty("channel", out JsonElement channelArray) &&
-							channelArray.ValueKind == JsonValueKind.Array)
+						JsonElement podcasts;
+						JsonElement channelArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("podcasts", out podcasts))
+							validParams = false;
+						if (!podcasts.TryGetProperty("channel", out channelArray))
+							validParams = false;
+						if (channelArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in channelArray.EnumerateArray())
 							{
@@ -341,7 +384,13 @@ namespace Thump.Pulse
 			channel.CoverArt = JsonHelper.GetString(element, "coverArt");
 			channel.Url = JsonHelper.GetString(element, "url");
 			channel.Status = JsonHelper.GetString(element, "status");
-			if (element.TryGetProperty("episode", out JsonElement episodeArray) && episodeArray.ValueKind == JsonValueKind.Array)
+			JsonElement episodeArray;
+			bool validEpisodes = true;
+			if (!element.TryGetProperty("episode", out episodeArray))
+				validEpisodes = false;
+			if (episodeArray.ValueKind != JsonValueKind.Array)
+				validEpisodes = false;
+			if (validEpisodes)
 			{
 				foreach (JsonElement episodeElement in episodeArray.EnumerateArray())
 				{
@@ -467,7 +516,16 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getArtist", out JsonElement response, "id=" + Uri.EscapeDataString(artistId)))
 					{
-						if (response.TryGetProperty("artist", out JsonElement artistElement) && artistElement.TryGetProperty("album", out JsonElement albumArray) && albumArray.ValueKind == JsonValueKind.Array)
+						JsonElement artistElement;
+						JsonElement albumArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("artist", out artistElement))
+							validParams = false;
+						if (!artistElement.TryGetProperty("album", out albumArray))
+							validParams = false;
+						if (albumArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in albumArray.EnumerateArray())
 							{
@@ -552,9 +610,16 @@ namespace Thump.Pulse
 							break;
 						}
 						int pageCount = 0;
-						if (response.TryGetProperty("albumList2", out JsonElement albumList) &&
-							albumList.TryGetProperty("album", out JsonElement albumArray) &&
-							albumArray.ValueKind == JsonValueKind.Array)
+						JsonElement albumList;
+						JsonElement albumArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("albumList2", out albumList))
+							validParams = false;
+						if (!albumList.TryGetProperty("album", out albumArray))
+							validParams = false;
+						if (albumArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in albumArray.EnumerateArray())
 							{
@@ -840,9 +905,16 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getPlaylists", out JsonElement response))
 					{
-						if (response.TryGetProperty("playlists", out JsonElement playlists) &&
-							playlists.TryGetProperty("playlist", out JsonElement playlistArray) &&
-							playlistArray.ValueKind == JsonValueKind.Array)
+						JsonElement playlists;
+						JsonElement playlistArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("playlists", out playlists))
+							validParams = false;
+						if (!playlists.TryGetProperty("playlist", out playlistArray))
+							validParams = false;
+						if (playlistArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement item in playlistArray.EnumerateArray())
 							{
@@ -907,8 +979,13 @@ namespace Thump.Pulse
 		private List<PulseTrack> ParseSongArray(JsonElement parent, string propertyName)
 		{
 			List<PulseTrack> songs = new List<PulseTrack>();
-			if (parent.TryGetProperty(propertyName, out JsonElement array) &&
-				array.ValueKind == JsonValueKind.Array)
+			JsonElement array;
+			bool validParams = true;
+			if (!parent.TryGetProperty(propertyName, out array))
+				validParams = false;
+			if (array.ValueKind != JsonValueKind.Array)
+				validParams = false;
+			if (validParams)
 			{
 				foreach (JsonElement element in array.EnumerateArray())
 				{
@@ -1066,7 +1143,13 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						if (doc.RootElement.TryGetProperty("tracks", out JsonElement tracks) && tracks.ValueKind == JsonValueKind.Array)
+						JsonElement tracks;
+						bool validParams = true;
+						if (!doc.RootElement.TryGetProperty("tracks", out tracks))
+							validParams = false;
+						if (tracks.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in tracks.EnumerateArray())
 							{
@@ -1103,7 +1186,13 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						if (doc.RootElement.TryGetProperty("artists", out JsonElement artists) && artists.ValueKind == JsonValueKind.Array)
+						JsonElement artists;
+						bool validParams = true;
+						if (!doc.RootElement.TryGetProperty("artists", out artists))
+							validParams = false;
+						if (artists.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in artists.EnumerateArray())
 							{
@@ -1154,9 +1243,16 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getAlbumList2", out JsonElement response, "type=newest&size=50"))
 					{
-						if (response.TryGetProperty("albumList2", out JsonElement albumList) &&
-							albumList.TryGetProperty("album", out JsonElement albumArray) &&
-							albumArray.ValueKind == JsonValueKind.Array)
+						JsonElement albumList;
+						JsonElement albumArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("albumList2", out albumList))
+							validParams = false;
+						if (!albumList.TryGetProperty("album", out albumArray))
+							validParams = false;
+						if (albumArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in albumArray.EnumerateArray())
 							{
@@ -1189,9 +1285,16 @@ namespace Thump.Pulse
 				{
 					if (SubsonicGet("getGenres", out JsonElement response))
 					{
-						if (response.TryGetProperty("genres", out JsonElement genres) &&
-							genres.TryGetProperty("genre", out JsonElement genreArray) &&
-							genreArray.ValueKind == JsonValueKind.Array)
+						JsonElement genres;
+						JsonElement genreArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("genres", out genres))
+							validParams = false;
+						if (!genres.TryGetProperty("genre", out genreArray))
+							validParams = false;
+						if (genreArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in genreArray.EnumerateArray())
 							{
@@ -1234,7 +1337,13 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						if (doc.RootElement.TryGetProperty("playlists", out JsonElement playlists) && playlists.ValueKind == JsonValueKind.Array)
+						JsonElement playlists;
+						bool validParams = true;
+						if (!doc.RootElement.TryGetProperty("playlists", out playlists))
+							validParams = false;
+						if (playlists.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in playlists.EnumerateArray())
 							{
@@ -1269,9 +1378,16 @@ namespace Thump.Pulse
 					string param = "genre=" + Uri.EscapeDataString(genre) + "&count=500&offset=0";
 					if (SubsonicGet("getSongsByGenre", out JsonElement response, param))
 					{
-						if (response.TryGetProperty("songsByGenre", out JsonElement songsByGenre) &&
-							songsByGenre.TryGetProperty("song", out JsonElement songArray) &&
-							songArray.ValueKind == JsonValueKind.Array)
+						JsonElement songsByGenre;
+						JsonElement songArray;
+						bool validParams = true;
+						if (!response.TryGetProperty("songsByGenre", out songsByGenre))
+							validParams = false;
+						if (!songsByGenre.TryGetProperty("song", out songArray))
+							validParams = false;
+						if (songArray.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in songArray.EnumerateArray())
 							{
@@ -1312,7 +1428,13 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						if (doc.RootElement.TryGetProperty("playlists", out JsonElement playlists) && playlists.ValueKind == JsonValueKind.Array)
+						JsonElement playlists;
+						bool validParams = true;
+						if (!doc.RootElement.TryGetProperty("playlists", out playlists))
+							validParams = false;
+						if (playlists.ValueKind != JsonValueKind.Array)
+							validParams = false;
+						if (validParams)
 						{
 							foreach (JsonElement element in playlists.EnumerateArray())
 							{

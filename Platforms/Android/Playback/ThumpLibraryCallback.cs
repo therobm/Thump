@@ -466,12 +466,12 @@ namespace Thump.Playback
 			}
 			PulseTrack track = new PulseTrack();
 			track.Id = trackId;
-			m_serviceData.GetTrackAudioFile(track, (localPath) =>
+			m_serviceData.IsTrackAvailable(track, (isAvailable) =>
 			{
 				MediaItem resolvedItem = item;
-				if (!string.IsNullOrEmpty(localPath))
+				if (!isAvailable)
 				{
-					Android.Net.Uri uri = Android.Net.Uri.FromFile(new Java.IO.File(localPath));
+					Android.Net.Uri uri = MediaItemBuilder.GetURI(track);
 					resolvedItem = item.BuildUpon().SetUri(uri).Build();
 				}
 				resolved.Add(resolvedItem);
@@ -503,12 +503,12 @@ namespace Thump.Playback
 			}
 			PulseTrack track = new PulseTrack();
 			track.Id = trackId;
-			m_serviceData.GetTrackAudioFile(track, (localPath) =>
+			m_serviceData.IsTrackAvailable(track, (isAvailable) =>
 			{
 				MediaItem resolvedItem = item;
-				if (!string.IsNullOrEmpty(localPath))
+				if (!isAvailable)
 				{
-					Android.Net.Uri uri = Android.Net.Uri.FromFile(new Java.IO.File(localPath));
+					Android.Net.Uri uri = MediaItemBuilder.GetURI(track);
 					resolvedItem = item.BuildUpon().SetUri(uri).Build();
 				}
 				resolved.Add(resolvedItem);
