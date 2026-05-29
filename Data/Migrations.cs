@@ -38,6 +38,7 @@ namespace Thump.Data
 		{
 			List<Migration> list = new List<Migration>();
 			list.Add(new Migration(1, INITIAL_SCHEMA));
+			list.Add(new Migration(2, MIGRATION_V2));
 			return list;
 		}
 
@@ -177,6 +178,38 @@ namespace Thump.Data
 				content_type TEXT,
 				fetched_at INTEGER NOT NULL,
 				last_accessed INTEGER NOT NULL
+			);
+		";
+
+		private const string MIGRATION_V2 = @"
+			CREATE TABLE genre_tracks (
+				genre TEXT NOT NULL,
+				track_id TEXT NOT NULL,
+				sort_order INTEGER NOT NULL,
+				PRIMARY KEY (genre, sort_order)
+			);
+
+			CREATE TABLE home_sections (
+				section_key TEXT NOT NULL,
+				position INTEGER NOT NULL,
+				item_type TEXT NOT NULL,
+				item_id TEXT,
+				name TEXT,
+				title TEXT,
+				artist TEXT,
+				artist_id TEXT,
+				album TEXT,
+				album_id TEXT,
+				cover_art TEXT,
+				year INTEGER NOT NULL DEFAULT 0,
+				song_count INTEGER NOT NULL DEFAULT 0,
+				album_count INTEGER NOT NULL DEFAULT 0,
+				play_count INTEGER NOT NULL DEFAULT 0,
+				duration INTEGER NOT NULL DEFAULT 0,
+				score REAL NOT NULL DEFAULT 0,
+				last_played INTEGER NOT NULL DEFAULT 0,
+				fetched_at INTEGER NOT NULL,
+				PRIMARY KEY (section_key, position)
 			);
 		";
 	}
