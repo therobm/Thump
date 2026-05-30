@@ -25,6 +25,7 @@ namespace Thump.Data
 		private const string s_keyPassword = "thump.login.password";
 		private const string s_keyAuthType = "thump.login.authType";
 		private const string s_keyServerType = "thump.login.serverType";
+		private const string s_keyUseHttps = "thump.login.useHttps";
 
 		public static bool GetScrobbleEnabled()
 		{
@@ -148,6 +149,15 @@ namespace Thump.Data
 		public static void SetServerType(PulseAPI.eServerType value)
 		{
 			Preferences.Set(s_keyServerType, (int)value);
+		}
+
+		public static bool GetUseHttps()
+		{
+			return Preferences.Get(s_keyUseHttps, true);
+		}
+		public static void SetUseHttps(bool value)
+		{
+			Preferences.Set(s_keyUseHttps, value);
 		}
 	}
 }
