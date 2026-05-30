@@ -471,7 +471,7 @@ namespace Thump.Playback
 				MediaItem resolvedItem = item;
 				if (isAvailable)
 				{
-					Android.Net.Uri uri = MediaItemBuilder.GetURI(track);
+					Android.Net.Uri uri = MediaItemBuilder.GetURI(track.Id);
 					resolvedItem = item.BuildUpon().SetUri(uri).Build();
 				}
 				resolved.Add(resolvedItem);
