@@ -151,6 +151,8 @@ namespace Thump.Views.Tiles
 			m_cacheIcon.IsVisible = false;
 			m_titleLabel.Opacity = 1.0;
 			m_artistLabel.Opacity = 1.0;
+			m_durationLabel.Opacity = 1.0;
+			m_art.Opacity = 1.0;
 			m_isPlayable = true;
 			PulseTrack song = BindingContext as PulseTrack;
 			if (song == null)
@@ -190,6 +192,8 @@ namespace Thump.Views.Tiles
 					}
 					m_titleLabel.Opacity = opacity;
 					m_artistLabel.Opacity = opacity;
+					m_durationLabel.Opacity = opacity;
+					m_art.Opacity = opacity;
 					bool playable;
 					if (!online && !cached)
 					{
