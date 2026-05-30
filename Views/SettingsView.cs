@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Maui;
 using Microsoft.Maui.ApplicationModel;
@@ -519,9 +520,8 @@ namespace Thump.Views
 			}
 		}
 
-		private static string ValidateAndNormalizeServer(string ip, string port, out string normalizedIp)
+		private string ValidateAndNormalizeServer(ref string ip, ref string port)
 		{
-			normalizedIp = "";
 			if (string.IsNullOrWhiteSpace(ip))
 			{
 				return "Server IP is required.";
@@ -535,29 +535,13 @@ namespace Thump.Views
 			{
 				return "Server port must be a number between 1 and 65535.";
 			}
-			string host = ip.Trim();
-			if (host.IndexOf(' ') >= 0)
-			{
-				return "Server IP cannot contain spaces.";
-			}
-			if (!host.StartsWith("http://") && !host.StartsWith("https://"))
-			{
-				host = "https://" + host;
-			}
-			Uri parsed;
-			if (!Uri.TryCreate(host + ":" + portNumber, UriKind.Absolute, out parsed))
+
+			Match match = Regex.Match(ip, @"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}");
+			if (!match.Success)
 			{
 				return "Server IP is not a valid address.";
 			}
-			if (parsed.Scheme != "http" && parsed.Scheme != "https")
-			{
-				return "Server address must be http or https.";
-			}
-			if (string.IsNullOrEmpty(parsed.Host))
-			{
-				return "Server IP is not a valid address.";
-			}
-			normalizedIp = host;
+			ip = match.Value;
 			return "";
 		}
 
@@ -568,15 +552,13 @@ namespace Thump.Views
 			string user = m_usernameEntry.Text;
 			string password = m_passwordEntry.Text;
 
-			string normalizedIp;
-			string validationError = ValidateAndNormalizeServer(ip, port, out normalizedIp);
+			string validationError = ValidateAndNormalizeServer(ref ip, ref port);
 			if (!string.IsNullOrEmpty(validationError))
 			{
 				m_connectStatusLabel.Text = validationError;
 				m_connectStatusLabel.TextColor = s_failColor;
 				return;
 			}
-			ip = normalizedIp;
 
 			ThumpSettings.SetServerIp(ip);
 			ThumpSettings.SetServerPort(port);

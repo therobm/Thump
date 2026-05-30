@@ -205,22 +205,22 @@ namespace Thump.Views
 
 		private void OnPlayClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnPlayTracks(m_tracks, 0);
+			m_mainView.OnPlayTracks(m_tracks, 0, eQueueSource.Playlist, m_playlist.Id);
 		}
 
 		private void OnShuffleClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnPlayTracksShuffled(m_tracks);
+			m_mainView.OnPlayTracksShuffled(m_tracks, eQueueSource.Playlist, m_playlist.Id);
 		}
 
 		private void OnAddToQueueClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnAddToQueue(m_tracks);
+			m_mainView.OnAddToQueue(m_tracks, eQueueSource.Playlist, m_playlist.Id);
 		}
 
 		private void OnPlayNextClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnPlayNext(m_tracks);
+			m_mainView.OnPlayNext(m_tracks, eQueueSource.Playlist, m_playlist.Id);
 		}
 	}
 }

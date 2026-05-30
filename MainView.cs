@@ -10,6 +10,14 @@ using Thump.Views;
 
 namespace Thump
 {
+	public enum eQueueSource
+	{
+		Track,
+		Album,
+		Artist,
+		Playlist,
+		Genre,
+	}
 	public enum eTab
 	{
 		Home,
@@ -243,7 +251,7 @@ namespace Thump
 			detail.Initialize();
 			PushDetail(detail);
 		}
-
+		
 		public void OnGenreSelected(PulseGenre genre)
 		{
 			GenreDetailView detail = new GenreDetailView(this, genre);
@@ -279,24 +287,24 @@ namespace Thump
 			}
 			else if (item.Kind == eDataType.Track)
 			{
-				PulseTrack song = item as PulseTrack;
-				if (song != null)
+				PulseTrack track = item as PulseTrack;
+				if (track != null)
 				{
 					List<PulseTrack> oneShotQueue = new List<PulseTrack>();
-					oneShotQueue.Add(song);
-					OnPlayTracks(oneShotQueue, 0);
+					oneShotQueue.Add(track);
+					OnPlayTracks(oneShotQueue, 0, eQueueSource.Track, track.Id);
 				}
 			}
 		}
 
-		public void OnTrackSelected(PulseTrack song)
+		public void OnTrackSelected(PulseTrack track)
 		{
 			List<PulseTrack> oneShotQueue = new List<PulseTrack>();
-			oneShotQueue.Add(song);
-			OnPlayTracks(oneShotQueue, 0);
+			oneShotQueue.Add(track);
+			OnPlayTracks(oneShotQueue, 0, eQueueSource.Track, track.Id);
 		}
 
-		public void OnPlayTracks(List<PulseTrack> tracks, int startIndex)
+		public void OnPlayTracks(List<PulseTrack> tracks, int startIndex, eQueueSource source, string sourceId = "")
 		{
 			if (tracks == null || tracks.Count == 0)
 			{
@@ -313,9 +321,16 @@ namespace Thump
 			m_miniPlayer.SetTrack(m_currentTrack);
 			ShowMiniPlayer();
 			m_player.Play(m_currentQueue, clampedIndex);
+
+			switch (source)
+			{
+				case eQueueSource.Playlist:
+					m_pulseClient.MarkPlaylistPlayed(sourceId, null);
+					break;
+			}
 		}
 
-		public void OnPlayTracksShuffled(List<PulseTrack> tracks)
+		public void OnPlayTracksShuffled(List<PulseTrack> tracks, eQueueSource source, string sourceId = "")
 		{
 			if (tracks == null || tracks.Count == 0)
 			{
@@ -334,7 +349,7 @@ namespace Thump
 				shuffled[idx] = shuffled[swap];
 				shuffled[swap] = tmp;
 			}
-			OnPlayTracks(shuffled, 0);
+			OnPlayTracks(shuffled, 0, source, sourceId);
 		}
 
 		public void OnTogglePlayPause()
@@ -420,7 +435,7 @@ namespace Thump
 			return m_repeatMode;
 		}
 
-		public void OnAddToQueue(List<PulseTrack> tracks)
+		public void OnAddToQueue(List<PulseTrack> tracks, eQueueSource source, string sourceId = "")
 		{
 			if (tracks == null || tracks.Count == 0)
 			{
@@ -428,7 +443,7 @@ namespace Thump
 			}
 			if (m_currentQueue.Count == 0)
 			{
-				OnPlayTracks(tracks, 0);
+				OnPlayTracks(tracks, 0, source, sourceId);
 				return;
 			}
 			m_currentQueue.AddRange(tracks);
@@ -441,7 +456,7 @@ namespace Thump
 			}
 		}
 
-		public void OnPlayNext(List<PulseTrack> tracks)
+		public void OnPlayNext(List<PulseTrack> tracks, eQueueSource source, string sourceId = "")
 		{
 			if (tracks == null || tracks.Count == 0)
 			{
@@ -449,7 +464,7 @@ namespace Thump
 			}
 			if (m_currentQueue.Count == 0)
 			{
-				OnPlayTracks(tracks, 0);
+				OnPlayTracks(tracks, 0, source, sourceId);
 				return;
 			}
 			int insertAt = m_currentQueueIndex + 1;
@@ -465,6 +480,9 @@ namespace Thump
 				m_nowPlayingView.RefreshQueue();
 				m_nowPlayingView.RefreshSkipButtons();
 			}
+
+			//todo this should also fire MarkAsPlayed for recency tracking
+			//or things should be unified cause this is silly
 		}
 
 		public void OnSeekToQueueItem(int index)
@@ -517,11 +535,11 @@ namespace Thump
 			single.Add(track);
 			if (choice == playNext)
 			{
-				OnPlayNext(single);
+				OnPlayNext(single, eQueueSource.Track, track.Id);
 			}
 			else if (choice == addToQueue)
 			{
-				OnAddToQueue(single);
+				OnAddToQueue(single, eQueueSource.Track, track.Id);
 			}
 		}
 
@@ -602,11 +620,11 @@ namespace Thump
 					return;
 				}
 				List<PulseTrack> combined = new List<PulseTrack>();
-				AccumulateArtistTracks(albums, 0, combined, shuffle);
+				AccumulateArtistTracks(artist.Id, albums, 0, combined, shuffle);
 			});
 		}
 
-		private void AccumulateArtistTracks(List<PulseAlbum> albums, int index, List<PulseTrack> combined, bool shuffle)
+		private void AccumulateArtistTracks(string artistId, List<PulseAlbum> albums, int index, List<PulseTrack> combined, bool shuffle)
 		{
 			if (index >= albums.Count)
 			{
@@ -616,11 +634,11 @@ namespace Thump
 				}
 				if (shuffle)
 				{
-					OnPlayTracksShuffled(combined);
+					OnPlayTracksShuffled(combined, eQueueSource.Artist, artistId);
 				}
 				else
 				{
-					OnPlayTracks(combined, 0);
+					OnPlayTracks(combined, 0, eQueueSource.Artist, artistId);
 				}
 				return;
 			}
@@ -638,7 +656,7 @@ namespace Thump
 				{
 					combined.AddRange(tracks);
 				}
-				AccumulateArtistTracks(albums, index + 1, combined, shuffle);
+				AccumulateArtistTracks(artistId, albums, index + 1, combined, shuffle);
 			});
 		}
 
