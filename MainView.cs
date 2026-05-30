@@ -321,8 +321,20 @@ namespace Thump
 			{
 				return;
 			}
-			SetShuffleState(true);
-			OnPlayTracks(tracks, 0);
+			// Shuffle the list ONCE here and submit the shuffled queue. Do NOT toggle the
+			// player's persistent ShuffleModeEnabled — that is a separate user-controlled
+			// setting (the Now Playing ⇋ button). The album/playlist/etc. Shuffle button
+			// is meant to randomize this one queue submission, not flip a mode.
+			List<PulseTrack> shuffled = new List<PulseTrack>(tracks);
+			System.Random random = new System.Random();
+			for (int idx = shuffled.Count - 1; idx > 0; idx--)
+			{
+				int swap = random.Next(idx + 1);
+				PulseTrack tmp = shuffled[idx];
+				shuffled[idx] = shuffled[swap];
+				shuffled[swap] = tmp;
+			}
+			OnPlayTracks(shuffled, 0);
 		}
 
 		public void OnTogglePlayPause()
