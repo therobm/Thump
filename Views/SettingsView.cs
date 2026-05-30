@@ -43,6 +43,9 @@ namespace Thump.Views
 		private Button m_serverSubsonic;
 		private Button m_serverPulse;
 		private PulseAPI.eServerType m_serverType = PulseAPI.eServerType.Subsonic;
+		private Button m_httpsHttps;
+		private Button m_httpsHttp;
+		private bool m_useHttps = true;
 		private Label m_connectStatusLabel;
 
 		public SettingsView(MainView mainView) : base(mainView)
@@ -302,6 +305,19 @@ namespace Thump.Views
 			serverRow.Children.Add(m_serverPulse);
 			section.Children.Add(serverRow);
 
+			section.Children.Add(BuildFieldLabel("Connection"));
+			HorizontalStackLayout httpsRow = new HorizontalStackLayout();
+			httpsRow.Spacing = 8;
+
+			m_httpsHttps = BuildSegmentButton("HTTPS");
+			m_httpsHttps.Clicked += OnHttpsHttpsClicked;
+			httpsRow.Children.Add(m_httpsHttps);
+
+			m_httpsHttp = BuildSegmentButton("HTTP");
+			m_httpsHttp.Clicked += OnHttpsHttpClicked;
+			httpsRow.Children.Add(m_httpsHttp);
+			section.Children.Add(httpsRow);
+
 			Button connectButton = new Button();
 			connectButton.Text = "Connect";
 			connectButton.TextColor = ThumpColors.Background;
@@ -345,6 +361,7 @@ namespace Thump.Views
 			m_passwordEntry.Text = ThumpSettings.GetPassword();
 			SetAuthType(ThumpSettings.GetAuthType());
 			SetServerType(ThumpSettings.GetServerType());
+			SetUseHttps(ThumpSettings.GetUseHttps());
 
 			RefreshCacheStats();
 		}
@@ -421,6 +438,25 @@ namespace Thump.Views
 			m_serverType = value;
 			StyleSegment(m_serverSubsonic, value == PulseAPI.eServerType.Subsonic);
 			StyleSegment(m_serverPulse, value == PulseAPI.eServerType.Pulse);
+		}
+
+		private void OnHttpsHttpsClicked(object sender, EventArgs e)
+		{
+			SetUseHttps(true);
+			ThumpSettings.SetUseHttps(m_useHttps);
+		}
+
+		private void OnHttpsHttpClicked(object sender, EventArgs e)
+		{
+			SetUseHttps(false);
+			ThumpSettings.SetUseHttps(m_useHttps);
+		}
+
+		private void SetUseHttps(bool value)
+		{
+			m_useHttps = value;
+			StyleSegment(m_httpsHttps, value == true);
+			StyleSegment(m_httpsHttp, value == false);
 		}
 
 		private void StyleSegment(Button button, bool active)
@@ -547,15 +583,17 @@ namespace Thump.Views
 			ThumpSettings.SetUsername(user);
 			ThumpSettings.SetPassword(password);
 			ThumpSettings.SetAuthType(m_authType);
+			ThumpSettings.SetUseHttps(m_useHttps);
 
 			m_connectStatusLabel.Text = "Connecting…";
 			m_connectStatusLabel.TextColor = ThumpColors.TextSecondary;
 
 			IMediaClient pulse = MainView.Data.Pulse;
 			SubsonicAPI.eSubSonicAuthType authType = m_authType;
+			bool useHttps = m_useHttps;
 			Task.Run(() =>
 			{
-				pulse.SetServerParams(ip, port, user, password, authType, true);
+				pulse.SetServerParams(ip, port, user, password, authType, useHttps);
 				bool success = pulse.TestConnection(out JsonElement response);
 				string message = "Unknown";
 				if (!success && response.TryGetProperty("error", out JsonElement error))
