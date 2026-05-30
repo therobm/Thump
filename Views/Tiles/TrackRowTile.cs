@@ -16,6 +16,7 @@ namespace Thump.Views.Tiles
 		private Label m_durationLabel;
 		private Label m_cacheIcon;
 		private PulseTrack m_song;
+		private bool m_isPlayable = true;
 
 		public TrackRowTile() : base(MainView.Self)
 		{
@@ -33,20 +34,16 @@ namespace Thump.Views.Tiles
 			textColumn.Width = GridLength.Star;
 			ColumnDefinition durationColumn = new ColumnDefinition();
 			durationColumn.Width = GridLength.Auto;
-			ColumnDefinition cacheIconColumn = new ColumnDefinition();
-			cacheIconColumn.Width = GridLength.Auto;
 			ColumnDefinition optionsColumn = new ColumnDefinition();
 			optionsColumn.Width = GridLength.Auto;
 			grid.ColumnDefinitions.Add(artColumn);
 			grid.ColumnDefinitions.Add(textColumn);
 			grid.ColumnDefinitions.Add(durationColumn);
-			grid.ColumnDefinitions.Add(cacheIconColumn);
 			grid.ColumnDefinitions.Add(optionsColumn);
 
 			grid.Children.Add(BuildArt());
 			grid.Children.Add(BuildText());
 			grid.Children.Add(BuildDuration());
-			grid.Children.Add(BuildCacheIcon());
 			grid.Children.Add(BuildOptions());
 
 			TapGestureRecognizer tap = new TapGestureRecognizer();
@@ -58,13 +55,20 @@ namespace Thump.Views.Tiles
 
 		private View BuildArt()
 		{
+			Grid artGrid = new Grid();
+			artGrid.WidthRequest = 44;
+			artGrid.HeightRequest = 44;
+			artGrid.VerticalOptions = LayoutOptions.Center;
+
 			m_art = new ArtImage();
 			m_art.WidthRequest = 44;
 			m_art.HeightRequest = 44;
-			m_art.VerticalOptions = LayoutOptions.Center;
+			artGrid.Children.Add(m_art);
 
-			Grid.SetColumn(m_art, 0);
-			return m_art;
+			artGrid.Children.Add(BuildCacheIcon());
+
+			Grid.SetColumn(artGrid, 0);
+			return artGrid;
 		}
 
 		private View BuildText()
@@ -109,13 +113,13 @@ namespace Thump.Views.Tiles
 			m_cacheIcon = new Label();
 			m_cacheIcon.FontFamily = "MaterialIcons";
 			m_cacheIcon.Text = "\uE837";
-			m_cacheIcon.FontSize = 16;
+			m_cacheIcon.FontSize = 12;
 			m_cacheIcon.TextColor = ThumpColors.Accent;
-			m_cacheIcon.VerticalOptions = LayoutOptions.Center;
-			m_cacheIcon.Margin = new Thickness(0, 0, 4, 0);
+			m_cacheIcon.HorizontalOptions = LayoutOptions.End;
+			m_cacheIcon.VerticalOptions = LayoutOptions.End;
+			m_cacheIcon.Margin = new Thickness(0, 0, 2, 2);
 			m_cacheIcon.IsVisible = false;
 
-			Grid.SetColumn(m_cacheIcon, 3);
 			return m_cacheIcon;
 		}
 
@@ -132,7 +136,7 @@ namespace Thump.Views.Tiles
 			optionsButton.VerticalOptions = LayoutOptions.Center;
 			optionsButton.Clicked += OnOptionsClicked;
 
-			Grid.SetColumn(optionsButton, 4);
+			Grid.SetColumn(optionsButton, 3);
 			return optionsButton;
 		}
 
@@ -147,6 +151,7 @@ namespace Thump.Views.Tiles
 			m_cacheIcon.IsVisible = false;
 			m_titleLabel.Opacity = 1.0;
 			m_artistLabel.Opacity = 1.0;
+			m_isPlayable = true;
 			PulseTrack song = BindingContext as PulseTrack;
 			if (song == null)
 			{
@@ -185,6 +190,16 @@ namespace Thump.Views.Tiles
 					}
 					m_titleLabel.Opacity = opacity;
 					m_artistLabel.Opacity = opacity;
+					bool playable;
+					if (!online && !cached)
+					{
+						playable = false;
+					}
+					else
+					{
+						playable = true;
+					}
+					m_isPlayable = playable;
 				});
 			});
 		}
@@ -208,6 +223,10 @@ namespace Thump.Views.Tiles
 		private void OnTapped(object sender, EventArgs e)
 		{
 			if (m_song == null)
+			{
+				return;
+			}
+			if (!m_isPlayable)
 			{
 				return;
 			}
