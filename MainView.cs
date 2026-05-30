@@ -653,6 +653,10 @@ namespace Thump
 
 		public void ShowMiniPlayer()
 		{
+			if (m_nowPlayingView != null && m_contentHost.Content == m_nowPlayingView)
+			{
+				return;
+			}
 			m_miniPlayer.IsVisible = true;
 		}
 
