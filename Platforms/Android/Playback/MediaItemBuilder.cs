@@ -16,16 +16,16 @@ namespace Thump.Playback
 				metadata.SetAlbumTitle(track.Album);
 			}
 
-			Android.Net.Uri uri = GetURI(track);
+			Android.Net.Uri uri = GetURI(track.Id);
 			MediaItem.Builder builder = new MediaItem.Builder();
 			builder.SetMediaId(track.Id);
 			builder.SetUri(uri);
 			builder.SetMediaMetadata(metadata.Build());
 			return builder.Build();
 		}
-		public static Android.Net.Uri GetURI(PulseTrack track)
+		public static Android.Net.Uri GetURI(string id)
 		{
-			Android.Net.Uri uri = Android.Net.Uri.Parse("thump://" + track.Id);
+			Android.Net.Uri uri = Android.Net.Uri.Parse("thump://" + id);
 			return uri;
 		}
 	}

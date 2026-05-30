@@ -27,7 +27,7 @@ namespace Thump.Pulse
 		private eSubSonicAuthType m_authType;
 		private Thread m_thread;
 		private bool m_bInitialized = false;
-		private bool m_bIsOnline = false;
+		private bool m_bIsOnline = true;
 		/// <summary>
 		/// todo this seems dumb now that we have a real cache
 		/// </summary>
@@ -110,7 +110,7 @@ namespace Thump.Pulse
 			catch (Exception ex)
 			{
 				//Don't log ping failures, this is our online/offline state polling
-				//Log.Exception(ex);
+				Log.Exception(ex);
 			}
 			m_bIsOnline = false;
 			response = default;
@@ -747,7 +747,8 @@ namespace Thump.Pulse
 		{
 			if (!IsOnline())
 			{
-				onComplete(false);
+				if (onComplete != null)
+					onComplete(false);
 				return;
 			}
 			Task.Run(() =>
@@ -765,7 +766,11 @@ namespace Thump.Pulse
 
 				}
 				bool result = ok;
-				MainThread.BeginInvokeOnMainThread(() => { onComplete(result); });
+				MainThread.BeginInvokeOnMainThread(() => 
+				{
+					if (onComplete != null)
+						onComplete(result); 
+				});
 			});
 		}
 
