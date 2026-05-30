@@ -251,11 +251,7 @@ namespace Thump
 			detail.Initialize();
 			PushDetail(detail);
 		}
-		public void OnPlaylistStarted(PulsePlaylist playlist)
-		{
-			
-		}
-
+		
 		public void OnGenreSelected(PulseGenre genre)
 		{
 			GenreDetailView detail = new GenreDetailView(this, genre);

@@ -205,7 +205,6 @@ namespace Thump.Views
 
 		private void OnPlayClicked(object sender, EventArgs e)
 		{
-			m_mainView.OnPlaylistStarted(m_playlist);
 			m_mainView.OnPlayTracks(m_tracks, 0, eQueueSource.Playlist, m_playlist.Id);
 		}
 
