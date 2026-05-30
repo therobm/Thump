@@ -1003,6 +1003,46 @@ namespace Thump.Pulse
 			return playlist;
 		}
 
+		// Pulse-native playlist envelope: typed PlaylistInfo serialized with
+		// PascalCase fields. The synthetic Subsonic-style coverArt id is
+		// derived locally; the per-user LastPlayed (when present) wins over
+		// the aggregate.
+		private PulsePlaylist ParsePulsePlaylist(JsonElement element)
+		{
+			PulsePlaylist playlist = new PulsePlaylist();
+			playlist.Id = JsonHelper.GetString(element, "Id");
+			playlist.Name = JsonHelper.GetString(element, "Name");
+			playlist.CoverArt = "pl-" + playlist.Id;
+			int songCount = 0;
+			JsonElement trackIds = default;
+			bool hasTrackIds = element.TryGetProperty("TrackIds", out trackIds);
+			if (hasTrackIds && trackIds.ValueKind == JsonValueKind.Array)
+			{
+				songCount = trackIds.GetArrayLength();
+			}
+			playlist.SongCount = songCount;
+			playlist.Duration = JsonHelper.GetInt(element, "DurationSeconds");
+			playlist.Score = 0f;
+			DateTime lastPlayed = DateTime.MinValue;
+			JsonElement userMap = default;
+			bool hasUserMap = element.TryGetProperty("UserLastPlayed", out userMap);
+			if (hasUserMap && userMap.ValueKind == JsonValueKind.Object && !string.IsNullOrEmpty(m_user))
+			{
+				JsonElement userValue = default;
+				bool hasUserEntry = userMap.TryGetProperty(m_user, out userValue);
+				if (hasUserEntry && userValue.ValueKind == JsonValueKind.String)
+				{
+					DateTime.TryParse(userValue.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out lastPlayed);
+				}
+			}
+			if (lastPlayed == DateTime.MinValue)
+			{
+				lastPlayed = JsonHelper.GetDateTime(element, "LastPlayed");
+			}
+			playlist.LastPlayed = lastPlayed;
+			return playlist;
+		}
+
 		private List<PulseTrack> ParseSongArray(JsonElement parent, string propertyName)
 		{
 			List<PulseTrack> songs = new List<PulseTrack>();
@@ -1381,17 +1421,20 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						JsonElement playlists;
+						JsonElement item = default;
+						JsonElement playlists = default;
 						bool validParams = true;
-						if (!doc.RootElement.TryGetProperty("playlists", out playlists))
+						if (!doc.RootElement.TryGetProperty("item", out item))
 							validParams = false;
-						if (playlists.ValueKind != JsonValueKind.Array)
+						if (validParams && !item.TryGetProperty("Playlists", out playlists))
+							validParams = false;
+						if (validParams && playlists.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
 						{
 							foreach (JsonElement element in playlists.EnumerateArray())
 							{
-								PulsePlaylist playlist = ParsePlaylist(element);
+								PulsePlaylist playlist = ParsePulsePlaylist(element);
 								results.Add(playlist);
 							}
 						}
@@ -1475,18 +1518,20 @@ namespace Thump.Pulse
 					if (json != null)
 					{
 						JsonDocument doc = JsonDocument.Parse(json);
-						JsonElement playlists;
+						JsonElement item = default;
+						JsonElement playlists = default;
 						bool validParams = true;
-						if (!doc.RootElement.TryGetProperty("playlists", out playlists))
+						if (!doc.RootElement.TryGetProperty("item", out item))
 							validParams = false;
-						if (playlists.ValueKind != JsonValueKind.Array)
+						if (validParams && !item.TryGetProperty("Playlists", out playlists))
+							validParams = false;
+						if (validParams && playlists.ValueKind != JsonValueKind.Array)
 							validParams = false;
 						if (validParams)
 						{
 							foreach (JsonElement element in playlists.EnumerateArray())
 							{
-								
-								PulsePlaylist playlist = ParsePlaylist(element);
+								PulsePlaylist playlist = ParsePulsePlaylist(element);
 								results.Add(playlist);
 							}
 						}
