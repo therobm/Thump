@@ -27,7 +27,7 @@ namespace Thump
 		public static ThumpData Data { get { return Self.m_data; } }
 		
 		private static MainView s_self;
-		private PulseClient m_pulseClient;
+		private PulseAPI m_pulseApi;
 		private ThumpCache m_cache;
 		private Grid m_rootGrid;
 		private ContentView m_contentHost;
@@ -78,15 +78,15 @@ namespace Thump
 			Content = m_rootGrid;
 
 
-			m_pulseClient = new PulseClient();
-			m_pulseClient.SetServerParams(ThumpSettings.GetServerIp(), ThumpSettings.GetServerPort(), ThumpSettings.GetUsername(), ThumpSettings.GetPassword(), ThumpSettings.GetAuthType(), true);
+			m_pulseApi = new PulseAPI();
+			m_pulseApi.SetServerParams(ThumpSettings.GetServerIp(), ThumpSettings.GetServerPort(), ThumpSettings.GetUsername(), ThumpSettings.GetPassword(), ThumpSettings.GetAuthType(), true);
 
 
 			string cacheRoot = FileSystem.CacheDirectory;
 			string databasePath = Path.Combine(cacheRoot, "thump.db");
 			string blobDirectory = Path.Combine(cacheRoot, "blobs");
 			m_cache = new ThumpCache(databasePath, blobDirectory);
-			m_data = new ThumpData(m_pulseClient, m_cache);
+			m_data = new ThumpData(m_pulseApi, m_cache);
 
 #if ANDROID
 			m_player = new AndroidThumpPlayer(this, m_data);

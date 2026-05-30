@@ -57,37 +57,37 @@ namespace Thump.Data
 
 	public class ThumpData
 	{
-		public PulseClient Pulse {get {return m_pulseClient; } }
+		public PulseAPI Pulse {get {return m_pulseApi; } }
 		public ThumpCache Cache {get { return m_cache; } }
-		private PulseClient m_pulseClient;
+		private PulseAPI m_pulseApi;
 		private ThumpCache m_cache;
 
 		private Dictionary<eRoutes, DataRoute> m_dataRoutes;
-		
 
-		public ThumpData(PulseClient pulseClient, ThumpCache cache)
+
+		public ThumpData(PulseAPI pulseApi, ThumpCache cache)
 		{
-			m_pulseClient = pulseClient;
+			m_pulseApi = pulseApi;
 			m_cache = cache;
-			
+
 			m_dataRoutes = new Dictionary<eRoutes, DataRoute>()
 			{
-				{ eRoutes.GetArtists,				new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetArtists,			m_cache.GetAllArtists,			m_cache.UpdateAllArtists,			IsValidList<PulseArtist>) },
-				{ eRoutes.GetAlbum,					new DataRouteID<PulseAlbum>(this,			eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetAlbum,				m_cache.GetAlbum,				m_cache.UpdateAlbum,				IsValidObject) },
-				{ eRoutes.GetAlbums,				new DataRoute<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetAlbums,			m_cache.GetAlbums,				m_cache.UpdateAlbums,				IsValidList<PulseAlbum>) },
-				{ eRoutes.GetAlbumsForArtist,		new DataRouteID<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetArtistAlbums,		m_cache.GetAlbumsForArtist,		m_cache.UpdateAlbumsForArtist,		IsValidList<PulseAlbum>) },
-				{ eRoutes.GetPlaylists,				new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPlaylists,			m_cache.GetAllPlaylists,		m_cache.UpdateAllPlaylists,			IsValidList<PulsePlaylist>) },
-				{ eRoutes.GetPlaylist,				new DataRouteID<PulsePlaylist>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPlaylist,			m_cache.GetPlaylist,			m_cache.UpdatePlaylist,				IsValidObject) },
-				{ eRoutes.GetGenres,				new DataRoute<List<PulseGenre>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetGenres,			m_cache.GetGenres,				m_cache.UpdateGenres,				IsValidList<PulseGenre>) },
-				{ eRoutes.GetTracksForGenre,		new DataRouteID<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetTracksForGenre,	m_cache.GetTracksForGenre,		m_cache.UpdateTracksForGenre,		IsValidList<PulseTrack>) },
-				{ eRoutes.GetCoverArt,				new DataRouteID<byte[]>(this,				eRouteCachingMethod.LocalFirst,		m_pulseClient.GetCoverArt,			m_cache.GetCoverArt,			m_cache.UpdateCoverArt,				IsValidBinary) },
-				{ eRoutes.GetRecentlyPlayed,		new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetRecentlyPlayed,	m_cache.GetRecentlyPlayed,		m_cache.UpdateRecentlyPlayed,		IsValidList<PulseObject>) },
-				{ eRoutes.GetTopPlaylists,			new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetTopPlaylists,		m_cache.GetTopPlaylists,		m_cache.UpdateTopPlaylists,			IsValidList<PulsePlaylist>) },
-				{ eRoutes.GetPopularArtists,		new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetPopularArtists,	m_cache.GetPopularArtists,		m_cache.UpdatePopularArtists,		IsValidList<PulseArtist>) },
-				{ eRoutes.GetRecentlyAdded,			new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetRecentlyAdded,		m_cache.GetRecentlyAdded,		m_cache.UpdateRecentlyAdded,		IsValidList<PulseObject>) },
-				{ eRoutes.GetFavorites,				new DataRoute<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseClient.GetFavorites,			m_cache.GetFavorites,			m_cache.UpdateFavorites,			IsValidList<PulseTrack>) },
+				{ eRoutes.GetArtists,				new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetArtists,				m_cache.GetAllArtists,			m_cache.UpdateAllArtists,			IsValidList<PulseArtist>) },
+				{ eRoutes.GetAlbum,					new DataRouteID<PulseAlbum>(this,			eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetAlbum,				m_cache.GetAlbum,				m_cache.UpdateAlbum,				IsValidObject) },
+				{ eRoutes.GetAlbums,				new DataRoute<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetAlbums,				m_cache.GetAlbums,				m_cache.UpdateAlbums,				IsValidList<PulseAlbum>) },
+				{ eRoutes.GetAlbumsForArtist,		new DataRouteID<List<PulseAlbum>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetArtistAlbums,			m_cache.GetAlbumsForArtist,		m_cache.UpdateAlbumsForArtist,		IsValidList<PulseAlbum>) },
+				{ eRoutes.GetPlaylists,				new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetPlaylists,			m_cache.GetAllPlaylists,		m_cache.UpdateAllPlaylists,			IsValidList<PulsePlaylist>) },
+				{ eRoutes.GetPlaylist,				new DataRouteID<PulsePlaylist>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetPlaylist,				m_cache.GetPlaylist,			m_cache.UpdatePlaylist,				IsValidObject) },
+				{ eRoutes.GetGenres,				new DataRoute<List<PulseGenre>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetGenres,				m_cache.GetGenres,				m_cache.UpdateGenres,				IsValidList<PulseGenre>) },
+				{ eRoutes.GetTracksForGenre,		new DataRouteID<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetTracksForGenre,		m_cache.GetTracksForGenre,		m_cache.UpdateTracksForGenre,		IsValidList<PulseTrack>) },
+				{ eRoutes.GetCoverArt,				new DataRouteID<byte[]>(this,				eRouteCachingMethod.LocalFirst,		m_pulseApi.GetCoverArt,				m_cache.GetCoverArt,			m_cache.UpdateCoverArt,				IsValidBinary) },
+				{ eRoutes.GetRecentlyPlayed,		new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetRecentlyPlayed,		m_cache.GetRecentlyPlayed,		m_cache.UpdateRecentlyPlayed,		IsValidList<PulseObject>) },
+				{ eRoutes.GetTopPlaylists,			new DataRoute<List<PulsePlaylist>>(this,	eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetTopPlaylists,			m_cache.GetTopPlaylists,		m_cache.UpdateTopPlaylists,			IsValidList<PulsePlaylist>) },
+				{ eRoutes.GetPopularArtists,		new DataRoute<List<PulseArtist>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetPopularArtists,		m_cache.GetPopularArtists,		m_cache.UpdatePopularArtists,		IsValidList<PulseArtist>) },
+				{ eRoutes.GetRecentlyAdded,			new DataRoute<List<PulseObject>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetRecentlyAdded,		m_cache.GetRecentlyAdded,		m_cache.UpdateRecentlyAdded,		IsValidList<PulseObject>) },
+				{ eRoutes.GetFavorites,				new DataRoute<List<PulseTrack>>(this,		eRouteCachingMethod.NetworkAuthorative,	m_pulseApi.GetFavorites,			m_cache.GetFavorites,			m_cache.UpdateFavorites,			IsValidList<PulseTrack>) },
 			};
-			
+
 		}
 
 		private void GetData<T>(DataRoute<T> dataRoute, Action<T> callback) where T : class
@@ -307,7 +307,7 @@ namespace Thump.Data
 
 			ManualResetEventSlim wait = new ManualResetEventSlim(false);
 			byte[] fetched = null;
-			m_pulseClient.GetTrackAudio(track.Id, (data) =>
+			m_pulseApi.GetTrackAudio(track.Id, (data) =>
 			{
 				fetched = data;
 				wait.Set();
@@ -355,7 +355,7 @@ namespace Thump.Data
 				return;
 			}
 
-			m_pulseClient.GetTrackAudio(track.Id, (data) =>
+			m_pulseApi.GetTrackAudio(track.Id, (data) =>
 			{
 				if (data == null || data.Length == 0)
 				{
@@ -373,7 +373,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			m_pulseClient.Search(query, callback);
+			m_pulseApi.Search(query, callback);
 		}
 
 		public void GetPodcasts(Action<List<PulsePodcastChannel>> callback)
@@ -382,7 +382,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			m_pulseClient.GetPodcasts(callback);
+			m_pulseApi.GetPodcasts(callback);
 		}
 
 		public void StarTrack(string trackId, Action<bool> callback)
@@ -391,7 +391,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			m_pulseClient.Star(trackId, callback);
+			m_pulseApi.Star(trackId, callback);
 		}
 
 		public void UnstarTrack(string trackId, Action<bool> callback)
@@ -400,7 +400,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			m_pulseClient.Unstar(trackId, callback);
+			m_pulseApi.Unstar(trackId, callback);
 		}
 
 		public void GetCoverArt(string coverArtId, Action<byte[]> callback)
@@ -495,7 +495,7 @@ namespace Thump.Data
 			{
 				return;
 			}
-			m_pulseClient.GetTopItems(callback);
+			m_pulseApi.GetTopItems(callback);
 		}
 
 		public void GetFavories(Action<List<PulseObject>> callback)

@@ -158,7 +158,7 @@ namespace Thump.Pulse
 		}
 	}
 
-	public class PulseClient
+	public class SubsonicAPI
 	{
 		public enum eSubSonicAuthType
 		{
@@ -181,7 +181,7 @@ namespace Thump.Pulse
 
 		private object m_httpClientLock = new object();
 
-		public PulseClient()
+		public SubsonicAPI()
 		{
 			m_thread = new Thread(ConnectionLoop);
 			m_thread.IsBackground = true;

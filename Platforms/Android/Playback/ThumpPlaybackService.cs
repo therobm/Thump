@@ -93,13 +93,13 @@ namespace Thump.Playback
 
 		private static ThumpData BuildThumpData()
 		{
-			PulseClient pulseClient = new PulseClient();
-			pulseClient.SetServerParams(ThumpSettings.GetServerIp(), ThumpSettings.GetServerPort(), ThumpSettings.GetUsername(), ThumpSettings.GetPassword(), ThumpSettings.GetAuthType(), true);
+			PulseAPI pulseApi = new PulseAPI();
+			pulseApi.SetServerParams(ThumpSettings.GetServerIp(), ThumpSettings.GetServerPort(), ThumpSettings.GetUsername(), ThumpSettings.GetPassword(), ThumpSettings.GetAuthType(), true);
 			string cacheRoot = FileSystem.CacheDirectory;
 			string databasePath = Path.Combine(cacheRoot, "thump.db");
 			string blobDirectory = Path.Combine(cacheRoot, "blobs");
 			ThumpCache cache = new ThumpCache(databasePath, blobDirectory);
-			return new ThumpData(pulseClient, cache);
+			return new ThumpData(pulseApi, cache);
 		}
 
 		private PendingIntent BuildSessionActivity()

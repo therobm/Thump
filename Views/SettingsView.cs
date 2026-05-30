@@ -39,7 +39,10 @@ namespace Thump.Views
 		private Entry m_passwordEntry;
 		private Button m_authToken;
 		private Button m_authLegacy;
-		private PulseClient.eSubSonicAuthType m_authType = PulseClient.eSubSonicAuthType.Token;
+		private SubsonicAPI.eSubSonicAuthType m_authType = SubsonicAPI.eSubSonicAuthType.Token;
+		private Button m_serverSubsonic;
+		private Button m_serverPulse;
+		private PulseAPI.eServerType m_serverType = PulseAPI.eServerType.Subsonic;
 		private Label m_connectStatusLabel;
 
 		public SettingsView(MainView mainView) : base(mainView)
@@ -286,6 +289,19 @@ namespace Thump.Views
 			authRow.Children.Add(m_authLegacy);
 			section.Children.Add(authRow);
 
+			section.Children.Add(BuildFieldLabel("Server Type"));
+			HorizontalStackLayout serverRow = new HorizontalStackLayout();
+			serverRow.Spacing = 8;
+
+			m_serverSubsonic = BuildSegmentButton("Subsonic");
+			m_serverSubsonic.Clicked += OnServerSubsonicClicked;
+			serverRow.Children.Add(m_serverSubsonic);
+
+			m_serverPulse = BuildSegmentButton("Pulse");
+			m_serverPulse.Clicked += OnServerPulseClicked;
+			serverRow.Children.Add(m_serverPulse);
+			section.Children.Add(serverRow);
+
 			Button connectButton = new Button();
 			connectButton.Text = "Connect";
 			connectButton.TextColor = ThumpColors.Background;
@@ -328,6 +344,7 @@ namespace Thump.Views
 			m_usernameEntry.Text = ThumpSettings.GetUsername();
 			m_passwordEntry.Text = ThumpSettings.GetPassword();
 			SetAuthType(ThumpSettings.GetAuthType());
+			SetServerType(ThumpSettings.GetServerType());
 
 			RefreshCacheStats();
 		}
@@ -370,21 +387,40 @@ namespace Thump.Views
 
 		private void OnAuthTokenClicked(object sender, EventArgs e)
 		{
-			SetAuthType(PulseClient.eSubSonicAuthType.Token);
+			SetAuthType(SubsonicAPI.eSubSonicAuthType.Token);
 			ThumpSettings.SetAuthType(m_authType);
 		}
 
 		private void OnAuthLegacyClicked(object sender, EventArgs e)
 		{
-			SetAuthType(PulseClient.eSubSonicAuthType.Legacy);
+			SetAuthType(SubsonicAPI.eSubSonicAuthType.Legacy);
 			ThumpSettings.SetAuthType(m_authType);
 		}
 
-		private void SetAuthType(PulseClient.eSubSonicAuthType value)
+		private void SetAuthType(SubsonicAPI.eSubSonicAuthType value)
 		{
 			m_authType = value;
-			StyleSegment(m_authToken, value == PulseClient.eSubSonicAuthType.Token);
-			StyleSegment(m_authLegacy, value == PulseClient.eSubSonicAuthType.Legacy);
+			StyleSegment(m_authToken, value == SubsonicAPI.eSubSonicAuthType.Token);
+			StyleSegment(m_authLegacy, value == SubsonicAPI.eSubSonicAuthType.Legacy);
+		}
+
+		private void OnServerSubsonicClicked(object sender, EventArgs e)
+		{
+			SetServerType(PulseAPI.eServerType.Subsonic);
+			ThumpSettings.SetServerType(m_serverType);
+		}
+
+		private void OnServerPulseClicked(object sender, EventArgs e)
+		{
+			SetServerType(PulseAPI.eServerType.Pulse);
+			ThumpSettings.SetServerType(m_serverType);
+		}
+
+		private void SetServerType(PulseAPI.eServerType value)
+		{
+			m_serverType = value;
+			StyleSegment(m_serverSubsonic, value == PulseAPI.eServerType.Subsonic);
+			StyleSegment(m_serverPulse, value == PulseAPI.eServerType.Pulse);
 		}
 
 		private void StyleSegment(Button button, bool active)
@@ -515,8 +551,8 @@ namespace Thump.Views
 			m_connectStatusLabel.Text = "Connecting…";
 			m_connectStatusLabel.TextColor = ThumpColors.TextSecondary;
 
-			PulseClient pulse = MainView.Data.Pulse;
-			PulseClient.eSubSonicAuthType authType = m_authType;
+			PulseAPI pulse = MainView.Data.Pulse;
+			SubsonicAPI.eSubSonicAuthType authType = m_authType;
 			Task.Run(() =>
 			{
 				pulse.SetServerParams(ip, port, user, password, authType, true);
